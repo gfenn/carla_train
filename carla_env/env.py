@@ -26,6 +26,12 @@ import gym
 from gym.spaces import Box, Discrete, Tuple
 
 from carla_env.scenarios import DEFAULT_SCENARIO
+from carla_env.rewards import compute_reward
+from carla_env.termination import compute_termination
+
+SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("~/CARLA_0.7.0/CarlaUE4.sh"))
+if not os.path.exists(SERVER_BINARY)
+    print("No $CARLA_SERVER CarlaUE4.sh binary exists.  Make sure env.config['server_binary'] is set.")
 
 # Set this where you want to save image outputs (or empty string to disable)
 CARLA_OUT_PATH = os.environ.get("CARLA_OUT", os.path.expanduser("/tmp/carla_out"))
@@ -68,17 +74,15 @@ GROUND_Z = 22
 
 # Default environment configuration
 ENV_CONFIG = {
-    "server_binary": os.environ.get("CARLA_SERVER", os.path.expanduser("~/CARLA_0.7.0/CarlaUE4.sh")),
+    "server_binary": SERVER_BINARY,
     "carla_out_path": CARLA_OUT_PATH,
     "log_images": True,
     "enable_planner": True,
     "framestack": 2,  # note: only [1, 2] currently supported
     "convert_images_to_video": False,
-    "early_terminate_on_collision": True,
-    "early_terminate_on_bounds": True,
-    "early_terminate_bounds_limit": 0.2,
+    "early_terminations": ["on_collision", "on_leave_bounds"],
     "verbose": True,
-    "reward_function": "custom",
+    "reward_function": "lane_keep",
     "render_x_res": 800,
     "render_y_res": 600,
     "x_res": 80,
@@ -359,10 +363,7 @@ class CarlaEnv(gym.Env):
         py_measurements["total_reward"] = self.total_reward
         done = (self.num_steps > self.scenario["max_steps"] or
                 py_measurements["next_command"] == "REACH_GOAL" or
-                (self.config["early_terminate_on_collision"] and
-                 collided_done(py_measurements)) or
-                (self.config["early_terminate_on_bounds"] and
-                 bounds_done(self.config["early_terminate_bounds_limit"], py_measurements)))
+                compute_termination(self, py_measurements))
         py_measurements["done"] = done
         self.prev_measurement = py_measurements
 
@@ -520,115 +521,6 @@ class CarlaEnv(gym.Env):
         return observation, py_measurements
 
 
-def compute_reward_corl2017(env, prev, current):
-    reward = 0.0
-
-    cur_dist = current["distance_to_goal"]
-
-    prev_dist = prev["distance_to_goal"]
-
-    if env.config["verbose"]:
-        print("Cur dist {}, prev dist {}".format(cur_dist, prev_dist))
-
-    # Distance travelled toward the goal in m
-    reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
-
-    # Change in speed (km/h)
-    reward += 0.05 * (current["forward_speed"] - prev["forward_speed"])
-
-    # New collision damage
-    reward -= .00002 * (
-        current["collision_vehicles"] + current["collision_pedestrians"] +
-        current["collision_other"] - prev["collision_vehicles"] -
-        prev["collision_pedestrians"] - prev["collision_other"])
-
-    # New sidewalk intersection
-    reward -= 2 * (
-        current["intersection_offroad"] - prev["intersection_offroad"])
-
-    # New opposite lane intersection
-    reward -= 2 * (
-        current["intersection_otherlane"] - prev["intersection_otherlane"])
-
-    return reward
-
-
-def compute_reward_custom(env, prev, current):
-    reward = 0.0
-
-    cur_dist = current["distance_to_goal"]
-    prev_dist = prev["distance_to_goal"]
-
-    if env.config["verbose"]:
-        print("Cur dist {}, prev dist {}".format(cur_dist, prev_dist))
-
-    # Distance travelled toward the goal in m
-    reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
-
-    # Speed reward, up 30.0 (km/h)
-    reward += np.clip(current["forward_speed"], 0.0, 30.0) / 10
-
-    # New collision damage
-    new_damage = (
-        current["collision_vehicles"] + current["collision_pedestrians"] +
-        current["collision_other"] - prev["collision_vehicles"] -
-        prev["collision_pedestrians"] - prev["collision_other"])
-    if new_damage:
-        reward -= 100.0
-
-    # Sidewalk intersection
-    reward -= current["intersection_offroad"]
-
-    # Opposite lane intersection
-    reward -= current["intersection_otherlane"]
-
-    # Reached goal
-    if current["next_command"] == "REACH_GOAL":
-        reward += 100.0
-
-    return reward
-
-
-def compute_reward_lane_keep(env, prev, current):
-    stepReward = 0.0
-
-    # Determine how much of the car is on the road
-    total_off = current["intersection_offroad"] + current["intersection_otherlane"]
-    percent_off = np.clip(total_off * 5, 0.0, 1.0)
-
-    # Reward speed times the percent on
-    stepReward += np.clip(current["forward_speed"] * (1.0 - percent_off), 0.0, 1000.0)
-
-    # New collision damage
-    new_damage = (
-        current["collision_vehicles"] + current["collision_pedestrians"] +
-        current["collision_other"] - prev["collision_vehicles"] -
-        prev["collision_pedestrians"] - prev["collision_other"])
-    if new_damage and not env.config["early_terminate_on_collision"]:
-        stepReward -= 100.0
-
-    # # Sidewalk intersection - lose based on how far off we are.  The step we move off
-    # # is heavily penalized, but much of the reward can be "earned back" by moving
-    # # back into the lane (not all of it).
-    # stepReward -= current["intersection_offroad"]
-    if not env.config["early_terminate_on_bounds"] and percent_off > env.config["early_terminate_bounds_limit"]:
-        stepReward -= 50
-
-    return stepReward
-
-
-REWARD_FUNCTIONS = {
-    "corl2017": compute_reward_corl2017,
-    "custom": compute_reward_custom,
-    "lane_keep": compute_reward_lane_keep,
-}
-
-
-def compute_reward(env, prev, current):
-    return REWARD_FUNCTIONS[env.config["reward_function"]](
-        env, prev, current)
-
-
 def print_measurements(measurements):
     number_of_agents = len(measurements.non_player_agents)
     player_measurements = measurements.player_measurements
@@ -654,23 +546,6 @@ def print_measurements(measurements):
 def sigmoid(x):
     x = float(x)
     return np.exp(x) / (1 + np.exp(x))
-
-
-def collided_done(py_measurements):
-    m = py_measurements
-    collided = (
-        m["collision_vehicles"] > 0 or m["collision_pedestrians"] > 0 or
-        m["collision_other"] > 0)
-    return bool(collided or m["total_reward"] < -100)
-
-
-def bounds_done(limit, py_measurements):
-    m = py_measurements
-    bounded = (
-        m["intersection_offroad"] > limit or
-        m["intersection_otherlane"] > limit
-    )
-    return bool(bounded)
 
 
 if __name__ == "__main__":
