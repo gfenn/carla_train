@@ -7,11 +7,6 @@ from baselines import deepq
 import deepq_learner
 
 
-def callback(lcl, _glb):
-    # Can do things and stuff each frame
-    pass
-
-
 def main():
     # Filenames
     carla_out_path = "/media/grant/FastData/carla"
@@ -49,32 +44,31 @@ def main():
     )
 
     # Learn
-    act = deepq_learner.learn(
-        env,
-        gpu_memory_fraction=0.7,
-        q_func=model,
-        lr=1e-4,
-        max_timesteps=int(1e6),
-        buffer_size=int(5e4),
-        exploration_fraction=0.1,
-        exploration_final_eps=0.02,
-        train_freq=4,
-        learning_starts=1000,
-        target_network_update_freq=1000,
-        gamma=0.9,
-        prioritized_replay=True,
-        prioritized_replay_alpha=0.6,
-        checkpoint_freq=1,
-        checkpoint_path=checkpoint_path,
-        print_freq=1,
-        callback=callback
-    )
+    learn_config = deepq_learner.DEEPQ_CONFIG.copy()
+    learn_config.update({
+        "gpu_memory_fraction": 0.7,
+        "lr": 1e-4,
+        "max_timesteps": int(1e6),
+        "buffer_size": int(5e4),
+        "exploration_fraction": 0.1,
+        "exploration_final_eps": 0.02,
+        "train_freq": 4,
+        "learning_starts": 1000,
+        "target_network_update_freq": 1000,
+        "gamma": 0.9,
+        "prioritized_replay": True,
+        "prioritized_replay_alpha": 0.6,
+        "checkpoint_freq": 10,
+        "checkpoint_path": checkpoint_path,
+        "print_freq": 1
+    })
+    learn = deepq_learner.DeepqLearner(env=env, q_func=model, config=learn_config)
+    learn.run()
+
     env.close()
 
     # Save the file
-
-    print("Saving model to " + model_save_path)
-    act.save(model_save_path)
+    learn.save(model_save_path)
 
 
 if __name__ == '__main__':

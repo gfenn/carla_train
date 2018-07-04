@@ -78,232 +78,214 @@ def load(path):
     return ActWrapper.load(path)
 
 
-def learn(env,
-          q_func,
-          gpu_memory_fraction=0.7,
-          lr=5e-4,
-          max_timesteps=100000,
-          buffer_size=50000,
-          exploration_fraction=0.1,
-          exploration_final_eps=0.02,
-          train_freq=1,
-          batch_size=32,
-          print_freq=100,
-          checkpoint_freq=10000,
-          checkpoint_path=None,
-          learning_starts=1000,
-          gamma=1.0,
-          target_network_update_freq=500,
-          prioritized_replay=False,
-          prioritized_replay_alpha=0.6,
-          prioritized_replay_beta0=0.4,
-          prioritized_replay_beta_iters=None,
-          prioritized_replay_eps=1e-6,
-          param_noise=False,
-          callback=None):
-    """Train a deepq model.
 
-    Parameters
-    -------
-    env: gym.Env
-        environment to train on
-    q_func: (tf.Variable, int, str, bool) -> tf.Variable
-        the model that takes the following inputs:
-            observation_in: object
-                the output of observation placeholder
-            num_actions: int
-                number of actions
-            scope: str
-            reuse: bool
-                should be passed to outer variable scope
-        and returns a tensor of shape (batch_size, num_actions) with values of every action.
-    lr: float
-        learning rate for adam optimizer
-    max_timesteps: int
-        number of env steps to optimizer for
-    buffer_size: int
-        size of the replay buffer
-    exploration_fraction: float
-        fraction of entire training period over which the exploration rate is annealed
-    exploration_final_eps: float
-        final value of random action probability
-    train_freq: int
-        update the model every `train_freq` steps.
-        set to None to disable printing
-    batch_size: int
-        size of a batched sampled from replay buffer for training
-    print_freq: int
-        how often to print out training progress
-        set to None to disable printing
-    checkpoint_freq: int
-        how often to save the model. This is so that the best version is restored
-        at the end of the training. If you do not wish to restore the best version at
-        the end of the training set this variable to None.
-    learning_starts: int
-        how many steps of the model to collect transitions for before learning starts
-    gamma: float
-        discount factor
-    target_network_update_freq: int
-        update the target network every `target_network_update_freq` steps.
-    prioritized_replay: True
-        if True prioritized replay buffer will be used.
-    prioritized_replay_alpha: float
-        alpha parameter for prioritized replay buffer
-    prioritized_replay_beta0: float
-        initial value of beta for prioritized replay buffer
-    prioritized_replay_beta_iters: int
-        number of iterations over which beta will be annealed from initial value
-        to 1.0. If set to None equals to max_timesteps.
-    prioritized_replay_eps: float
-        epsilon to add to the TD errors when updating priorities.
-    callback: (locals, globals) -> None
-        function called at every steps with state of the algorithm.
-        If callback returns true training stops.
+DEEPQ_CONFIG = {
+    "gpu_memory_fraction": 0.7,
+    "lr": 5e-4,
+    "max_timesteps": int(1e6),
+    "buffer_size": 50000,
+    "exploration_fraction": 0.1,
+    "exploration_final_eps": 0.02,
+    "train_freq": 1,
+    "batch_size": 32,
+    "print_freq": 100,
+    "checkpoint_freq": 10000,
+    "checkpoint_path": None,
+    "learning_starts": 1000,
+    "gamma": 1.0,
+    "target_network_update_freq": 500,
+    "prioritized_replay": False,
+    "prioritized_replay_alpha": 0.6,
+    "prioritized_replay_beta0": 0.4,
+    "prioritized_replay_beta_iters": None,
+    "prioritized_replay_eps": 1e-6,
+    "param_noise": False,
+}
 
-    Returns
-    -------
-    act: ActWrapper
-        Wrapper over act function. Adds ability to save it and load it.
-        See header of baselines/deepq/categorical.py for details on the act function.
-    """
-    # Create all the functions necessary to train the model
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
-    sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-    sess.__enter__()
 
-    # capture the shape outside the closure so that the env object is not serialized
-    # by cloudpickle when serializing make_obs_ph
+class DeepqLearner:
+    def __init__(self, env, q_func, config=DEEPQ_CONFIG, callback=None):
+        self.env = env
+        self.q_func = q_func
+        self.config = config
+        self.callback = callback
 
-    def make_obs_ph(name):
-        return ObservationInput(env.observation_space, name=name)
+        # Create all the functions necessary to train the model
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=config["gpu_memory_fraction"])
+        sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+        sess.__enter__()
 
-    act, train, update_target, debug = deepq.build_train(
-        make_obs_ph=make_obs_ph,
-        q_func=q_func,
-        num_actions=env.action_space.n,
-        optimizer=tf.train.AdamOptimizer(learning_rate=lr),
-        gamma=gamma,
-        grad_norm_clipping=10,
-        param_noise=param_noise
-    )
+        # capture the shape outside the closure so that the env object is not serialized
+        # by cloudpickle when serializing make_obs_ph
 
-    act_params = {
-        # 'make_obs_ph': make_obs_ph,
-        # 'q_func': q_func,
-        'num_actions': env.action_space.n,
-    }
+        def make_obs_ph(name):
+            return ObservationInput(env.observation_space, name=name)
 
-    act = ActWrapper(act, act_params)
+        act, self.train, self.update_target, self.debug = deepq.build_train(
+            make_obs_ph=make_obs_ph,
+            q_func=q_func,
+            num_actions=env.action_space.n,
+            optimizer=tf.train.AdamOptimizer(learning_rate=config["lr"]),
+            gamma=config["gamma"],
+            grad_norm_clipping=10,
+            param_noise=config["param_noise"]
+        )
 
-    # Create the replay buffer
-    if prioritized_replay:
-        replay_buffer = PrioritizedReplayBuffer(buffer_size, alpha=prioritized_replay_alpha)
-        if prioritized_replay_beta_iters is None:
-            prioritized_replay_beta_iters = max_timesteps
-        beta_schedule = LinearSchedule(prioritized_replay_beta_iters,
-                                       initial_p=prioritized_replay_beta0,
-                                       final_p=1.0)
-    else:
-        replay_buffer = ReplayBuffer(buffer_size)
-        beta_schedule = None
-    # Create the schedule for exploration starting from 1.
-    exploration = LinearSchedule(schedule_timesteps=int(exploration_fraction * max_timesteps),
-                                 initial_p=1.0,
-                                 final_p=exploration_final_eps)
+        act_params = {
+            # 'make_obs_ph': make_obs_ph,
+            # 'q_func': q_func,
+            'num_actions': env.action_space.n,
+        }
 
-    # Initialize the parameters and copy them to the target network.
-    U.initialize()
-    update_target()
+        self.act = ActWrapper(act, act_params)
 
-    episode_rewards = [0.0]
-    saved_mean_reward = None
-    obs = env.reset()
-    reset = True
+        # Create the replay buffer
+        if config["prioritized_replay"]:
+            self.replay_buffer = PrioritizedReplayBuffer(config["buffer_size"], alpha=config["prioritized_replay_alpha"])
+            if config["prioritized_replay_beta_iters"] is None:
+                config["prioritized_replay_beta_iters"] = config["max_timesteps"]
+            self.beta_schedule = LinearSchedule(config["prioritized_replay_beta_iters"],
+                                                initial_p=config["prioritized_replay_beta0"],
+                                                final_p=1.0)
+        else:
+            self.replay_buffer = ReplayBuffer(config["buffer_size"])
+            self.beta_schedule = None
+        # Create the schedule for exploration starting from 1.
+        self.exploration = LinearSchedule(schedule_timesteps=int(config["exploration_fraction"] * config["max_timesteps"]),
+                                          initial_p=1.0,
+                                          final_p=config["exploration_final_eps"])
 
-    with tempfile.TemporaryDirectory() as td:
-        td = checkpoint_path or td
+        # Initialize the parameters and copy them to the target network.
+        U.initialize()
+        self.update_target()
 
-        model_file = os.path.join(td, "model")
-        model_saved = False
-        if tf.train.latest_checkpoint(td) is not None:
-            load_state(model_file)
-            logger.log('Loaded model from {}'.format(model_file))
-            model_saved = True
+        self.t = 0
+        self.episode_rewards = [0.0]
+        self.num_episodes = 1
+        self.saved_mean_reward = None
+        self.saved_episode_num = None
+        self.episode_frames = 0
+        self.model_file = None
 
-        for t in range(max_timesteps):
-            if callback is not None:
-                if callback(locals(), globals()):
-                    break
-            # Take action and update exploration to the newest value
-            kwargs = {}
-            if not param_noise:
-                update_eps = exploration.value(t)
-                update_param_noise_threshold = 0.
-            else:
-                update_eps = 0.
-                # Compute the threshold such that the KL divergence between perturbed and non-perturbed
-                # policy is comparable to eps-greedy exploration with eps = exploration.value(t).
-                # See Appendix C.1 in Parameter Space Noise for Exploration, Plappert et al., 2017
-                # for detailed explanation.
-                update_param_noise_threshold = -np.log(1. - exploration.value(t) + exploration.value(t) / float(env.action_space.n))
-                kwargs['reset'] = reset
-                kwargs['update_param_noise_threshold'] = update_param_noise_threshold
-                kwargs['update_param_noise_scale'] = True
-            action = act(np.array(obs)[None], update_eps=update_eps, **kwargs)[0]
-            env_action = action
-            reset = False
-            new_obs, rew, done, _ = env.step(env_action)
-            # Store transition in the replay buffer.
-            replay_buffer.add(obs, action, rew, new_obs, float(done))
-            obs = new_obs
+    def run(self):
+        reset = True
+        obs = self.env.reset()
 
-            episode_rewards[-1] += rew
-            if done:
-                obs = env.reset()
-                episode_rewards.append(0.0)
-                reset = True
+        with tempfile.TemporaryDirectory() as td:
+            td = self.config["checkpoint_path"] or td
 
-            if t > learning_starts and t % train_freq == 0:
-                # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
-                if prioritized_replay:
-                    experience = replay_buffer.sample(batch_size, beta=beta_schedule.value(t))
-                    (obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = experience
-                else:
-                    obses_t, actions, rewards, obses_tp1, dones = replay_buffer.sample(batch_size)
-                    weights, batch_idxes = np.ones_like(rewards), None
-                td_errors = train(obses_t, actions, rewards, obses_tp1, dones, weights)
-                if prioritized_replay:
-                    new_priorities = np.abs(td_errors) + prioritized_replay_eps
-                    replay_buffer.update_priorities(batch_idxes, new_priorities)
+            self.model_file = os.path.join(td, "model")
+            if tf.train.latest_checkpoint(td) is not None:
+                load_state(self.model_file)
+                logger.log('Loaded model from {}'.format(self.model_file))
 
-            if t > learning_starts and t % target_network_update_freq == 0:
-                # Update target network periodically.
-                update_target()
+            for self.t in range(self.config["max_timesteps"]):
+                if self.callback is not None:
+                    if self.callback(locals(), globals()):
+                        break
 
-            num_episodes = len(episode_rewards)
-            if done and num_episodes > 1:
-                mean_100ep_reward = round(np.mean(episode_rewards[-101:-1]), 1)
-                if print_freq is not None and len(episode_rewards) % print_freq == 0:
-                    logger.record_tabular("steps", t)
-                    logger.record_tabular("episodes", num_episodes)
-                    logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
-                    logger.record_tabular("% time spent exploring", int(100 * exploration.value(t)))
-                    logger.dump_tabular()
+                # Determine next action to take, then take that action and observe results
+                action = self._action(obs, reset)
+                env_action = action
+                new_obs, rew, done, _ = self.env.step(env_action)
+                self.replay_buffer.add(obs, action, rew, new_obs, float(done))
+                obs = new_obs
 
-                # See if we need to run checkpoint
-                if checkpoint_freq is not None \
-                        and t > learning_starts \
-                        and num_episodes % checkpoint_freq == 0:
-                    if saved_mean_reward is None or mean_100ep_reward > saved_mean_reward:
-                        if print_freq is not None:
-                            logger.log("Saving model due to mean reward increase: {} -> {}".format(
-                                       saved_mean_reward, mean_100ep_reward))
-                        save_state(model_file)
-                        model_saved = True
-                        saved_mean_reward = mean_100ep_reward
-        if model_saved:
-            if print_freq is not None:
-                logger.log("Restored model with mean reward: {}".format(saved_mean_reward))
-            load_state(model_file)
+                # Increment typical values
+                reset = False
+                self.episode_frames += 1
+                self.episode_rewards[-1] += rew
 
-    return act
+                # See if done with episode
+                if done:
+                    obs = self._reset()
+                    reset = True
+
+                # Do training and deepq updating as needed
+                if self.t > self.config["learning_starts"]:
+                    if self.t % self.config["train_freq"] == 0:
+                        self._train()
+                    if self.t % self.config["target_network_update_freq"] == 0:
+                        self.update_target()
+
+    def _action(self, obs, reset):
+        # Take action and update exploration to the newest value
+        kwargs = {}
+        if not self.config["param_noise"]:
+            update_eps = self.exploration.value(self.t)
+            # update_param_noise_threshold = 0.
+        else:
+            update_eps = 0.
+            # Compute the threshold such that the KL divergence between perturbed and non-perturbed
+            # policy is comparable to eps-greedy exploration with eps = exploration.value(t).
+            # See Appendix C.1 in Parameter Space Noise for Exploration, Plappert et al., 2017
+            # for detailed explanation.
+            update_param_noise_threshold = -np.log(
+                1. - self.exploration.value(self.t) + self.exploration.value(self.t) / float(self.env.action_space.n))
+            kwargs['reset'] = reset
+            kwargs['update_param_noise_threshold'] = update_param_noise_threshold
+            kwargs['update_param_noise_scale'] = True
+        return self.act(np.array(obs)[None], update_eps=update_eps, **kwargs)[0]
+
+    def _train(self):
+        # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
+        if self.config["prioritized_replay"]:
+            experience = self.replay_buffer.sample(self.config["batch_size"], beta=self.beta_schedule.value(self.t))
+            (obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = experience
+        else:
+            obses_t, actions, rewards, obses_tp1, dones = self.replay_buffer.sample(self.config["batch_size"])
+            weights, batch_idxes = np.ones_like(rewards), None
+
+        # Determine errors
+        td_errors = self.train(obses_t, actions, rewards, obses_tp1, dones, weights)
+        if self.config["prioritized_replay"]:
+            new_priorities = np.abs(td_errors) + self.config["prioritized_replay_eps"]
+            self.replay_buffer.update_priorities(batch_idxes, new_priorities)
+
+    def _reset(self):
+        self.attempt_print()
+        self.attempt_checkpoint()
+        self.episode_rewards.append(0.0)
+        self.num_episodes += 1
+        self.episode_frames = 0
+
+        return self.env.reset()
+
+    def calc_mean_100ep_reward(self):
+        if self.num_episodes <= 1:
+            return None
+        return round(np.mean(self.episode_rewards[-101:-1]), 1)
+
+    def attempt_print(self):
+        p_freq = self.config["print_freq"]
+        if p_freq is not None and self.num_episodes % p_freq == 0:
+            logger.record_tabular("% time spent exploring", int(100 * self.exploration.value(self.t)))
+            logger.record_tabular("reward - current", self.episode_rewards[-1])
+            logger.record_tabular("reward - mean", self.calc_mean_100ep_reward())
+            logger.record_tabular("reward - saved", self.saved_mean_reward)
+            logger.record_tabular("episode # - current", self.num_episodes)
+            logger.record_tabular("episode # - saved", self.saved_episode_num)
+            logger.record_tabular("steps - total", self.t)
+            logger.record_tabular("steps - episode", self.episode_frames)
+            logger.dump_tabular()
+
+    def attempt_checkpoint(self):
+        # Determine if we're going to checkpoint
+        c_freq = self.config["checkpoint_freq"]
+        if c_freq is not None \
+                and self.t > self.config["learning_starts"] \
+                and self.num_episodes % c_freq == 0:
+
+            # Determine if reward is growing
+            mean_100ep_reward = self.calc_mean_100ep_reward()
+            if self.saved_mean_reward is None or mean_100ep_reward > self.saved_mean_reward:
+                if self.config["print_freq"] is not None:
+                    logger.log("Saving model due to mean reward increase: {} -> {}".format(
+                        self.saved_mean_reward, mean_100ep_reward))
+                save_state(self.model_file)
+                self.saved_mean_reward = mean_100ep_reward
+                self.saved_episode_num = self.num_episodes
+
+    def save(self, save_path):
+        print("Saving model to " + save_path)
+        self.act.save(save_path)
