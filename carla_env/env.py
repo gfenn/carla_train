@@ -75,6 +75,7 @@ GROUND_Z = 22
 ENV_CONFIG = {
     "server_binary": SERVER_BINARY,
     "carla_out_path": CARLA_OUT_PATH,
+    "measurements_subdir": "measurements",
     "log_images": True,
     "enable_planner": True,
     "framestack": 2,  # note: only [1, 2] currently supported
@@ -370,11 +371,16 @@ class CarlaEnv(gym.Env):
 
         # Write out measurements to file
         if self.config["carla_out_path"]:
+            # Ensure measurements dir exists
+            measurements_dir = os.path.join(self.config["carla_out_path"], self.config["measurements_subdir"])
+            if not os.path.exists(measurements_dir):
+                os.mkdir(measurements_dir)
+
             if not self.measurements_file:
                 self.measurements_file = open(
                     os.path.join(
-                        self.config["carla_out_path"],
-                        "measurements_{}.json".format(self.episode_id)),
+                        measurements_dir,
+                        "m_{}.json".format(self.episode_id)),
                     "w")
             self.measurements_file.write(json.dumps(py_measurements))
             self.measurements_file.write("\n")
