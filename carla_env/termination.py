@@ -16,14 +16,19 @@ def terminate_on_leave_bounds(py_measurements):
     return bool(bounded)
 
 
+EARLY_TERMINATIONS = "early_terminations"
+TERMINATE_ON_COLLISION = "on_collision"
+TERMINATE_ON_LEAVE_BOUNDS = "on_leave_bounds"
+
+
 TERMINATION_FUNCTIONS = {
-    "on_collision": terminate_on_collision,
-    "on_leave_bounds": terminate_on_leave_bounds,
+    TERMINATE_ON_COLLISION: terminate_on_collision,
+    TERMINATE_ON_LEAVE_BOUNDS: terminate_on_leave_bounds,
 }
 
 
 def compute_termination(env, py_measurements):
-    terms = env.config["early_terminations"]
+    terms = env.config[EARLY_TERMINATIONS]
     if terms:
         for term in terms:
             if TERMINATION_FUNCTIONS[term](py_measurements):

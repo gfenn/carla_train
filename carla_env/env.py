@@ -12,7 +12,6 @@ import json
 import random
 import signal
 import subprocess
-import sys
 import time
 import traceback
 
@@ -27,11 +26,11 @@ from gym.spaces import Box, Discrete, Tuple
 
 from carla_env.scenarios import DEFAULT_SCENARIO
 from carla_env.rewards import compute_reward
-from carla_env.termination import compute_termination
+import carla_env.termination as TERM
 
 SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("~/CARLA_0.7.0/CarlaUE4.sh"))
-if not os.path.exists(SERVER_BINARY)
-    print("No $CARLA_SERVER CarlaUE4.sh binary exists.  Make sure env.config['server_binary'] is set.")
+if not os.path.exists(SERVER_BINARY):
+    print("Since no $CARLA_SERVER -> CarlaUE4.sh binary exists, env.config['server_binary'] is no longer optional set.")
 
 # Set this where you want to save image outputs (or empty string to disable)
 CARLA_OUT_PATH = os.environ.get("CARLA_OUT", os.path.expanduser("/tmp/carla_out"))
@@ -79,8 +78,8 @@ ENV_CONFIG = {
     "log_images": True,
     "enable_planner": True,
     "framestack": 2,  # note: only [1, 2] currently supported
-    "convert_images_to_video": False,
-    "early_terminations": ["on_collision", "on_leave_bounds"],
+    "convert_images_to_video": True,
+    TERM.EARLY_TERMINATIONS: [TERM.TERMINATE_ON_COLLISION, TERM.TERMINATE_ON_LEAVE_BOUNDS],
     "verbose": True,
     "reward_function": "lane_keep",
     "render_x_res": 800,
@@ -151,10 +150,11 @@ class CarlaEnv(gym.Env):
                 0, 255, shape=(
                     config["y_res"], config["x_res"],
                     3 * config["framestack"]), dtype=np.uint8)
-        self.observation_space = Tuple(  # forward_speed, dist to goal
-            [image_space,
-             Discrete(len(COMMANDS_ENUM)),  # next_command
-             Box(-128.0, 128.0, shape=(2,), dtype=np.float32)])
+        # self.observation_space = Tuple(  # forward_speed, dist to goal
+        #     [image_space,
+        #      Discrete(len(COMMANDS_ENUM)),  # next_command
+        #      Box(-128.0, 128.0, shape=(2,), dtype=np.float32)])
+        self.observation_space = image_space
 
         # TODO(ekl) this isn't really a proper gym spec
         self._spec = lambda: None
@@ -297,11 +297,12 @@ class CarlaEnv(gym.Env):
             prev_image = image
         if self.config["framestack"] == 2:
             image = np.concatenate([prev_image, image], axis=2)
-        obs = (
-            image,
-            COMMAND_ORDINAL[py_measurements["next_command"]],
-            [py_measurements["forward_speed"],
-             py_measurements["distance_to_goal"]])
+        # obs = (
+        #     image,
+        #     COMMAND_ORDINAL[py_measurements["next_command"]],
+        #     [py_measurements["forward_speed"],
+        #      py_measurements["distance_to_goal"]])
+        obs = image
         self.last_obs = obs
         return obs
 
@@ -363,7 +364,7 @@ class CarlaEnv(gym.Env):
         py_measurements["total_reward"] = self.total_reward
         done = (self.num_steps > self.scenario["max_steps"] or
                 py_measurements["next_command"] == "REACH_GOAL" or
-                compute_termination(self, py_measurements))
+                TERM.compute_termination(self, py_measurements))
         py_measurements["done"] = done
         self.prev_measurement = py_measurements
 

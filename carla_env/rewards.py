@@ -34,42 +34,6 @@ def compute_reward_corl2017(env, prev, current):
     return reward
 
 
-def compute_reward_custom(env, prev, current):
-    reward = 0.0
-
-    cur_dist = current["distance_to_goal"]
-    prev_dist = prev["distance_to_goal"]
-
-    if env.config["verbose"]:
-        print("Cur dist {}, prev dist {}".format(cur_dist, prev_dist))
-
-    # Distance travelled toward the goal in m
-    reward += np.clip(prev_dist - cur_dist, -10.0, 10.0)
-
-    # Speed reward, up 30.0 (km/h)
-    reward += np.clip(current["forward_speed"], 0.0, 30.0) / 10
-
-    # New collision damage
-    new_damage = (
-        current["collision_vehicles"] + current["collision_pedestrians"] +
-        current["collision_other"] - prev["collision_vehicles"] -
-        prev["collision_pedestrians"] - prev["collision_other"])
-    if new_damage:
-        reward -= 100.0
-
-    # Sidewalk intersection
-    reward -= current["intersection_offroad"]
-
-    # Opposite lane intersection
-    reward -= current["intersection_otherlane"]
-
-    # Reached goal
-    if current["next_command"] == "REACH_GOAL":
-        reward += 100.0
-
-    return reward
-
-
 def compute_reward_lane_keep(env, prev, current):
     stepReward = 0.0
 
@@ -94,9 +58,13 @@ def compute_reward_lane_keep(env, prev, current):
     return stepReward
 
 
+REWARD_CORL2017 = "corl2017"
+REWARD_CUSTOM = "custom"
+REWARD_LANE_KEEP = "lane_keep"
+
+
 REWARD_FUNCTIONS = {
     "corl2017": compute_reward_corl2017,
-    "custom": compute_reward_custom,
     "lane_keep": compute_reward_lane_keep,
 }
 
