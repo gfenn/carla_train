@@ -36,24 +36,30 @@ def compute_reward_corl2017(env, prev, current):
 
 def compute_reward_lane_keep(env, prev, current):
     stepReward = 0.0
+    desiredSpeed = 25
+    speed = current["forward_speed"] * 3.8
 
-    # Reward speed times the percent on
-    stepReward += current["forward_speed"]
+    # Reward moving forward (up to target speed)
+    if speed >= 1:
+        stepReward += 0.1 + np.clip(speed, 0.0, desiredSpeed) / desiredSpeed
 
-    # # New collision damage
-    # new_damage = (
-    #     current["collision_vehicles"] + current["collision_pedestrians"] +
-    #     current["collision_other"] - prev["collision_vehicles"] -
-    #     prev["collision_pedestrians"] - prev["collision_other"])
-    # if new_damage and not env.config["early_terminate_on_collision"]:
-    #     stepReward -= 100.0
+    # Penalize going over desired, will become negative at 1.5x desired
+    if speed > desiredSpeed:
+        stepReward -= 2 * (speed - desiredSpeed) / desiredSpeed
 
-    # # Sidewalk intersection - lose based on how far off we are.  The step we move off
-    # # is heavily penalized, but much of the reward can be "earned back" by moving
-    # # back into the lane (not all of it).
-    # stepReward -= current["intersection_offroad"]
-    # if not env.config["early_terminate_on_bounds"] and percent_off > env.config["early_terminate_bounds_limit"]:
-    #     stepReward -= 50
+    # Apply a penalty if any of these conditions are met
+    if not prev["applied_penalty"]:
+        leaving_road = current["intersection_offroad"] > prev["intersection_offroad"]
+        leaving_lane = current["intersection_otherlane"] > prev["intersection_otherlane"]
+        collision_vehicle = current["collision_vehicles"] > prev["collision_vehicles"]
+        collision_ped = current["collision_pedestrians"] > prev["collision_pedestrians"]
+        collision_other = current["collision_other"] > prev["collision_other"]
+        if leaving_road or leaving_lane:
+            stepReward -= 1 + (speed ** 2) / 100.0
+            current["applied_penalty"] = True
+        elif collision_vehicle or collision_ped or collision_other:
+            stepReward -= 1 + (speed ** 2) / 10.0
+            current["applied_penalty"] = True
 
     return stepReward
 

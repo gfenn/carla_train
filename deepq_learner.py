@@ -92,7 +92,7 @@ DEEPQ_CONFIG = {
     "checkpoint_freq": 10000,
     "checkpoint_path": None,
     "learning_starts": 1000,
-    "gamma": 1.0,
+    "gamma": 0.99,
     "target_network_update_freq": 500,
     "prioritized_replay": False,
     "prioritized_replay_alpha": 0.6,
@@ -273,6 +273,7 @@ class DeepqLearner:
         # Determine if we're going to checkpoint
         c_freq = self.config["checkpoint_freq"]
         if c_freq is not None \
+                and self.num_episodes > 100 \
                 and self.t > self.config["learning_starts"] \
                 and self.num_episodes % c_freq == 0:
 
@@ -282,9 +283,11 @@ class DeepqLearner:
                 if self.config["print_freq"] is not None:
                     logger.log("Saving model due to mean reward increase: {} -> {}".format(
                         self.saved_mean_reward, mean_100ep_reward))
-                save_state(self.model_file)
-                self.saved_mean_reward = mean_100ep_reward
-                self.saved_episode_num = self.num_episodes
+                    self.saved_mean_reward = mean_100ep_reward
+                    self.saved_episode_num = self.num_episodes
+
+            # Save anyway lol
+            save_state(self.model_file)
 
     def save(self, save_path):
         print("Saving model to " + save_path)

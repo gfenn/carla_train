@@ -80,7 +80,7 @@ ENV_CONFIG = {
     "enable_planner": True,
     "framestack": 2,  # note: only [1, 2] currently supported
     "convert_images_to_video": True,
-    TERM.EARLY_TERMINATIONS: [TERM.TERMINATE_ON_COLLISION, TERM.TERMINATE_ON_LEAVE_BOUNDS],
+    TERM.EARLY_TERMINATIONS: [key for key in TERM.TERMINATION_FUNCTIONS.keys()],
     "verbose": True,
     "reward_function": "lane_keep",
     "render_x_res": 800,
@@ -177,6 +177,8 @@ class CarlaEnv(gym.Env):
         self.start_coord = None
         self.end_coord = None
         self.last_obs = None
+        self.framestack = [None] * config["framestack"]
+        self.framestack_index = 0
 
     def init_server(self):
         print("Initializing new Carla server...")
@@ -290,22 +292,28 @@ class CarlaEnv(gym.Env):
         self.prev_measurement = py_measurements
         return self.encode_obs(self.preprocess_image(image), py_measurements)
 
-    def encode_obs(self, image, py_measurements):
-        assert self.config["framestack"] in [1, 2]
-        prev_image = self.prev_image
-        self.prev_image = image
-        if prev_image is None:
-            prev_image = image
-        if self.config["framestack"] == 2:
-            image = np.concatenate([prev_image, image], axis=2)
-        # obs = (
-        #     image,
-        #     COMMAND_ORDINAL[py_measurements["next_command"]],
-        #     [py_measurements["forward_speed"],
-        #      py_measurements["distance_to_goal"]])
-        obs = image
+
+    def encode_obs(self, obs, py_measurements):
+        new_obs = obs
+        num_frames = int(self.config["framestack"])
+        if num_frames > 1:
+            # Spread out to number of frames
+            frame_array = [obs] * num_frames
+            for frame_index in range(1, num_frames):
+                index = (self.framestack_index - frame_index) % num_frames
+                if self.framestack[index] is not None:
+                    frame_array[frame_index] = self.framestack[index]
+
+            # Concatenate into a single np array
+            new_obs = np.concatenate(frame_array, axis=2)
+
+        # Store frame
+        self.framestack[self.framestack_index] = obs
+        self.framestack_index = (self.framestack_index + 1) % num_frames
         self.last_obs = obs
-        return obs
+
+        # Return
+        return new_obs
 
     def step(self, action):
         try:
@@ -365,7 +373,7 @@ class CarlaEnv(gym.Env):
         py_measurements["total_reward"] = self.total_reward
         done = (self.num_steps > self.scenario["max_steps"] or
                 py_measurements["next_command"] == "REACH_GOAL" or
-                TERM.compute_termination(self, py_measurements))
+                TERM.compute_termination(self, py_measurements, self.prev_measurement))
         py_measurements["done"] = done
         self.prev_measurement = py_measurements
 
@@ -401,7 +409,7 @@ class CarlaEnv(gym.Env):
         if not os.path.exists(videos_dir):
             os.makedirs(videos_dir)
         ffmpeg_cmd = (
-            "ffmpeg -loglevel -8 -r 60 -f image2 -s {x_res}x{y_res} "
+            "ffmpeg -loglevel -8 -r 30 -f image2 -s {x_res}x{y_res} "
             "-start_number 0 -i "
             "{img}_%04d.jpg -vcodec libx264 {vid}.mp4 && rm -f {img}_*.jpg "
         ).format(
@@ -512,6 +520,7 @@ class CarlaEnv(gym.Env):
             "num_pedestrians": self.scenario["num_pedestrians"],
             "max_steps": self.scenario["max_steps"],
             "next_command": next_command,
+            "applied_penalty": False,
         }
 
         if self.config["carla_out_path"] and self.config["log_images"]:
