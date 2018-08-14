@@ -28,7 +28,7 @@ from carla_env.scenarios import DEFAULT_SCENARIO
 from carla_env.rewards import compute_reward
 import carla_env.termination as TERM
 
-SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("~/CARLA_0.7.0/CarlaUE4.sh"))
+SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("/usr/share/carla/current/CarlaUE4.sh"))
 if not os.path.exists(SERVER_BINARY):
     print("Since no $CARLA_SERVER -> CarlaUE4.sh binary exists, env.config['server_binary'] is no longer optional set.")
 
@@ -89,7 +89,6 @@ ENV_CONFIG = {
     "y_res": 80,
     "server_map": "/Game/Maps/Town02",
     "scenarios": [DEFAULT_SCENARIO],
-    "use_depth_camera": False,
     "discrete_actions": True,
     "squash_action_logits": False,
 }
@@ -98,23 +97,57 @@ ENV_CONFIG = {
 DISCRETE_ACTIONS = {
     # coast
     0: [0.0, 0.0],
-    # turn left
-    1: [0.0, -0.5],
-    # turn right
-    2: [0.0, 0.5],
+
     # forward
-    3: [1.0, 0.0],
+    1: [1.00, 0.0],
+    2: [0.75, 0.0],
+    3: [0.50, 0.0],
+    4: [0.25, 0.0],
+
+    # hard left
+    5: [1.00, -0.5],
+    6: [0.75, -0.5],
+    7: [0.50, -0.5],
+    8: [0.25, -0.5],
+
+    # slight left
+     9: [1.00, -0.2],
+    10: [0.75, -0.2],
+    11: [0.50, -0.2],
+    12: [0.25, -0.2],
+
+    # right left
+    13: [1.00, 0.5],
+    14: [0.75, 0.5],
+    15: [0.50, 0.5],
+    16: [0.25, 0.5],
+
+    # right left
+    17: [1.00, 0.2],
+    18: [0.75, 0.2],
+    19: [0.50, 0.2],
+    20: [0.25, 0.2],
+
     # brake
-    4: [-0.5, 0.0],
-    # forward left
-    5: [1.0, -0.5],
-    # forward right
-    6: [1.0, 0.5],
+    21: [-1.00, 0.0],
+    22: [-0.75, 0.0],
+    23: [-0.50, 0.0],
+    24: [-0.25, 0.0],
+
     # brake left
-    7: [-0.5, -0.5],
+    25: [-1.00, -0.5],
+    26: [-0.75, -0.5],
+    27: [-0.50, -0.5],
+    28: [-0.25, -0.5],
+
     # brake right
-    8: [-0.5, 0.5],
+    29: [-1.00, 0.5],
+    30: [-0.75, 0.5],
+    31: [-0.50, 0.5],
+    32: [-0.25, 0.5],
 }
+
+NUM_CLASSIFICATIONS = 13
 
 
 live_carla_processes = set()
@@ -141,16 +174,21 @@ class CarlaEnv(gym.Env):
             self.action_space = Discrete(len(DISCRETE_ACTIONS))
         else:
             self.action_space = Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
-        if config["use_depth_camera"]:
-            image_space = Box(
-                -1.0, 1.0, shape=(
-                    config["y_res"], config["x_res"],
-                    1 * config["framestack"]), dtype=np.float32)
-        else:
-            image_space = Box(
-                0, 255, shape=(
-                    config["y_res"], config["x_res"],
-                    3 * config["framestack"]), dtype=np.uint8)
+
+        # TODO -----> Possible to have speed in observation space?
+        # Depth camera
+        # image_space = Box(
+        #     -1.0, 1.0, shape=(
+        #         config["y_res"], config["x_res"],
+        #         1 * config["framestack"]), dtype=np.float32)
+
+        # RGB Camera
+        self.frame_shape = (config["y_res"], config["x_res"])
+        image_space = Box(
+            0, 1, shape=(
+                config["y_res"], config["x_res"],
+                NUM_CLASSIFICATIONS * config["framestack"]), dtype=np.float32)
+
         # self.observation_space = Tuple(  # forward_speed, dist to goal
         #     [image_space,
         #      Discrete(len(COMMANDS_ENUM)),  # next_command
@@ -232,6 +270,14 @@ class CarlaEnv(gym.Env):
                 error = e
         raise error
 
+    def _build_camera(self, name, post):
+        camera_color = Camera(name, PostProcessing=post)
+        camera_color.set_image_size(
+            self.config["render_x_res"], self.config["render_y_res"])
+        camera_color.set_position(0.30, 0, 1.30)
+        return camera_color
+
+
     def _reset(self):
         self.num_steps = 0
         self.total_reward = 0
@@ -255,18 +301,10 @@ class CarlaEnv(gym.Env):
             WeatherId=self.weather)
         settings.randomize_seeds()
 
-        if self.config["use_depth_camera"]:
-            camera1 = Camera("CameraDepth", PostProcessing="Depth")
-            camera1.set_image_size(
-                self.config["render_x_res"], self.config["render_y_res"])
-            camera1.set_position(0.30, 0, 1.30)
-            settings.add_sensor(camera1)
-
-        camera2 = Camera("CameraRGB")
-        camera2.set_image_size(
-            self.config["render_x_res"], self.config["render_y_res"])
-        camera2.set_position(0.30, 0, 1.30)
-        settings.add_sensor(camera2)
+        # Add the cameras
+        settings.add_sensor(self._build_camera(name="CameraRGB", post="SceneFinal"))
+        settings.add_sensor(self._build_camera(name="CameraDepth", post="Depth"))
+        settings.add_sensor(self._build_camera(name="CameraClass", post="SemanticSegmentation"))
 
         # Setup start and end positions
         scene = self.client.load_settings(settings)
@@ -396,7 +434,9 @@ class CarlaEnv(gym.Env):
                 self.measurements_file.close()
                 self.measurements_file = None
                 if self.config["convert_images_to_video"]:
-                    self.images_to_video()
+                    self.images_to_video(camera_name="RGB")
+                    self.images_to_video(camera_name="Depth")
+                    self.images_to_video(camera_name="Class")
 
         self.num_steps += 1
         image = self.preprocess_image(image)
@@ -404,44 +444,67 @@ class CarlaEnv(gym.Env):
             self.encode_obs(image, py_measurements), reward, done,
             py_measurements)
 
-    def images_to_video(self):
-        videos_dir = os.path.join(self.config["carla_out_path"], "Videos")
+    def images_to_video(self, camera_name):
+        # Video directory
+        videos_dir = os.path.join(self.config["carla_out_path"], "Videos" + camera_name)
         if not os.path.exists(videos_dir):
             os.makedirs(videos_dir)
+
+        # Build command
         ffmpeg_cmd = (
-            "ffmpeg -loglevel -8 -r 30 -f image2 -s {x_res}x{y_res} "
+            "ffmpeg -loglevel -8 -r 10 -f image2 -s {x_res}x{y_res} "
             "-start_number 0 -i "
             "{img}_%04d.jpg -vcodec libx264 {vid}.mp4 && rm -f {img}_*.jpg "
         ).format(
             x_res=self.config["render_x_res"],
             y_res=self.config["render_y_res"],
             vid=os.path.join(videos_dir, self.episode_id),
-            img=os.path.join(self.config["carla_out_path"], "CameraRGB", self.episode_id))
+            img=os.path.join(self.config["carla_out_path"], "Camera" + camera_name, self.episode_id))
 
-        print("Executing ffmpeg command", ffmpeg_cmd)
+        # Execute command
+        print("Executing ffmpeg command: ", ffmpeg_cmd)
         try:
-            subprocess.call(ffmpeg_cmd, shell=True, timeout=20)
-        except Exception:
+            subprocess.call(ffmpeg_cmd, shell=True, timeout=60)
+        except Exception as ex:
             print("FFMPEG EXPIRED")
+            print(ex)
 
     def preprocess_image(self, image):
-        if self.config["use_depth_camera"]:
-            assert self.config["use_depth_camera"]
-            data = (image.data - 0.5) * 2
-            data = data.reshape(
-                self.config["render_y_res"], self.config["render_x_res"], 1)
-            data = cv2.resize(
-                data, (self.config["x_res"], self.config["y_res"]),
-                interpolation=cv2.INTER_AREA)
-            data = np.expand_dims(data, 2)
-        else:
-            data = image.data.reshape(
-                self.config["render_y_res"], self.config["render_x_res"], 3)
-            data = cv2.resize(
-                data, (self.config["x_res"], self.config["y_res"]),
-                interpolation=cv2.INTER_AREA)
-            data = (data.astype(np.float32) - 128) / 128
-        return data
+        # if self.config["use_depth_camera"]:
+        #     assert self.config["use_depth_camera"]
+        #     data = (image.data - 0.5) * 2
+        #     data = data.reshape(
+        #         self.config["render_y_res"], self.config["render_x_res"], 1)
+        #     data = cv2.resize(
+        #         data, (self.config["x_res"], self.config["y_res"]),
+        #         interpolation=cv2.INTER_AREA)
+        #     data = np.expand_dims(data, 2)
+        # else:
+        #     data = image.data.reshape(
+        #         self.config["render_y_res"], self.config["render_x_res"], 3)
+        #     data = cv2.resize(
+        #         data, (self.config["x_res"], self.config["y_res"]),
+        #         interpolation=cv2.INTER_AREA)
+        #     data = (data.astype(np.float32) - 128) / 128
+        return image
+
+    def _fuse_depth_class(self, depth, clazz):
+        # Resize each
+        depth_reshape = depth.reshape(self.config["render_y_res"], self.config["render_x_res"])
+        depth = cv2.resize(depth_reshape, (self.config["x_res"], self.config["y_res"]))
+
+        clazz_reshape = clazz.reshape(self.config["render_y_res"], self.config["render_x_res"])
+        clazz = cv2.resize(clazz_reshape, (self.config["x_res"], self.config["y_res"]))
+
+        shape = (depth.shape[0], depth.shape[1], NUM_CLASSIFICATIONS)
+        obs = np.full(shape, 1, dtype=np.float32)
+        for x in range(shape[0]):
+            for y in range(shape[1]):
+                classification = clazz[x, y]
+                obs[x, y, classification] = depth[x, y]
+
+        return obs
+
 
     def _read_observation(self):
         # Read the data produced by the server this frame.
@@ -451,14 +514,12 @@ class CarlaEnv(gym.Env):
         if self.config["verbose"]:
             print_measurements(measurements)
 
-        observation = None
-        if self.config["use_depth_camera"]:
-            camera_name = "CameraDepth"
-        else:
-            camera_name = "CameraRGB"
-        for name, image in sensor_data.items():
-            if name == camera_name:
-                observation = image
+        # observation = None
+        observation = self._fuse_depth_class(sensor_data['CameraDepth'].data, sensor_data['CameraClass'].data)
+        # camera_name = "CameraRGB"
+        # for name, image in sensor_data.items():
+        #     if name == camera_name:
+        #         observation = image
 
         cur = measurements.player_measurements
 
@@ -525,13 +586,14 @@ class CarlaEnv(gym.Env):
 
         if self.config["carla_out_path"] and self.config["log_images"]:
             for name, image in sensor_data.items():
-                out_dir = os.path.join(self.config["carla_out_path"], name)
-                if not os.path.exists(out_dir):
-                    os.makedirs(out_dir)
-                out_file = os.path.join(
-                    out_dir,
-                    "{}_{:>04}.jpg".format(self.episode_id, self.num_steps))
-                scipy.misc.imsave(out_file, image.data)
+                # if name == "CameraRGB":
+                    out_dir = os.path.join(self.config["carla_out_path"], name)
+                    if not os.path.exists(out_dir):
+                        os.makedirs(out_dir)
+                    out_file = os.path.join(
+                        out_dir,
+                        "{}_{:>04}.jpg".format(self.episode_id, self.num_steps))
+                    scipy.misc.imsave(out_file, image.data)
 
         assert observation is not None, sensor_data
         return observation, py_measurements

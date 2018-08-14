@@ -11,28 +11,44 @@ def terminate_on_collision(curr, prev):
 # so long as they move inwards.
 def terminate_on_otherlane(curr, prev):
     bounded = (
-        curr["intersection_otherlane"] > prev["intersection_otherlane"]
+        curr["intersection_otherlane"] > 0.9
     )
     return bool(bounded)
 
 
 def terminate_on_offroad(curr, prev):
     bounded = (
-        curr["intersection_offroad"] > prev["intersection_offroad"]
+        curr["intersection_offroad"] > 0.90
     )
     return bool(bounded)
+
+def terminate_no_movement(curr, prev):
+    # Increase your tracking
+    tracking_no_move = prev.get("tracking_no_movement", 0)
+    curr["tracking_no_movement"] = tracking_no_move + 1
+
+    # Apply filter
+    BETA = 0.97
+    running_total = prev.get("tracking_no_movement_running", 0)
+    new_running_total = running_total * BETA + curr["forward_speed"] * (1 - BETA)
+    curr["tracking_no_movement_running"] = new_running_total
+
+    # Bad?
+    return tracking_no_move > 300 and new_running_total < 1
 
 
 EARLY_TERMINATIONS = "early_terminations"
 TERMINATE_ON_COLLISION = "on_collision"
 TERMINATE_ON_OTHERLANE = "on_otherlane"
 TERMINATE_ON_OFFROAD = "on_offroad"
+TERMINATE_NO_MOVEMENT = "no_movement"
 
 
 TERMINATION_FUNCTIONS = {
     TERMINATE_ON_COLLISION: terminate_on_collision,
     TERMINATE_ON_OTHERLANE: terminate_on_otherlane,
     TERMINATE_ON_OFFROAD: terminate_on_offroad,
+    TERMINATE_NO_MOVEMENT: terminate_no_movement
 }
 
 

@@ -22,25 +22,28 @@ def main():
     env_config.update({
         "verbose": False,
         "carla_out_path": carla_out_path,
-        "x_res": 160,
-        "y_res": 160,
+        "log_images": False,
+        "convert_images_to_video": False,
+        "x_res": 100,
+        "y_res": 100,
         "use_depth_camera": False,
         "discrete_actions": True,
         "server_map": "/Game/Maps/Town02",
         "reward_function": rewards.REWARD_LANE_KEEP,
         "enable_planner": False,
-        "framestack": 8,
+        "framestack": 4,
         terminations.EARLY_TERMINATIONS: [
             terminations.TERMINATE_ON_COLLISION,
             terminations.TERMINATE_ON_OFFROAD,
-            terminations.TERMINATE_ON_OTHERLANE],
+            terminations.TERMINATE_ON_OTHERLANE,
+            terminations.TERMINATE_NO_MOVEMENT],
         "scenarios": scenarios.TOWN2_LANE_KEEP,
     })
     env = CarlaEnv(env_config)
 
     # Create an OpenAI-deepq baseline
     model = deepq.models.cnn_to_mlp(
-        convs=[(32, 4, 2), (64, 3, 2), (128, 3, 2), (256, 10, 2)],
+        convs=[(32, 3, 2), (32, 3, 2), (64, 5, 2),  (128, 5, 1)],
         hiddens=[512],
         dueling=True
     )
@@ -53,7 +56,7 @@ def main():
         "max_timesteps": int(1e6),
         "buffer_size": int(1e4),
         "exploration_fraction": 0.1,
-        "exploration_final_eps": 0.05,
+        "exploration_final_eps": 0.1,
         "train_freq": 4,
         "learning_starts": 1000,
         "target_network_update_freq": 1000,

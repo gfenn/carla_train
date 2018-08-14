@@ -41,25 +41,21 @@ def compute_reward_lane_keep(env, prev, current):
 
     # Reward moving forward (up to target speed)
     if speed >= 1:
-        stepReward += 0.1 + np.clip(speed, 0.0, desiredSpeed) / desiredSpeed
+        speedReward = 0.1 + np.clip(speed, 0.0, desiredSpeed) / desiredSpeed
 
-    # Penalize going over desired, will become negative at 1.5x desired
-    if speed > desiredSpeed:
-        stepReward -= 2 * (speed - desiredSpeed) / desiredSpeed
+        # Penalize going over desired, will become negative at 1.5x desired
+        if speed > desiredSpeed:
+            speedReward -= 2 * (speed - desiredSpeed) / desiredSpeed
+        else:
+            offroad = max(current["intersection_offroad"], current["intersection_otherlane"])
+            speedReward *= 1 - (offroad * 2)
 
-    # Apply a penalty if any of these conditions are met
-    if not prev["applied_penalty"]:
-        leaving_road = current["intersection_offroad"] > prev["intersection_offroad"]
-        leaving_lane = current["intersection_otherlane"] > prev["intersection_otherlane"]
-        collision_vehicle = current["collision_vehicles"] > prev["collision_vehicles"]
-        collision_ped = current["collision_pedestrians"] > prev["collision_pedestrians"]
-        collision_other = current["collision_other"] > prev["collision_other"]
-        if leaving_road or leaving_lane:
-            stepReward -= 1 + (speed ** 2) / 100.0
-            current["applied_penalty"] = True
-        elif collision_vehicle or collision_ped or collision_other:
-            stepReward -= 1 + (speed ** 2) / 10.0
-            current["applied_penalty"] = True
+        # Add reward
+        stepReward += speedReward
+
+    # Collision penalty
+    if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
+        stepReward -= 1 + (speed ** 2) / 10.0
 
     return stepReward
 
