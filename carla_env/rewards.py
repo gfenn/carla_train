@@ -35,29 +35,36 @@ def compute_reward_corl2017(env, prev, current):
 
 
 def compute_reward_lane_keep(env, prev, current):
-    stepReward = 0.0
-    desiredSpeed = 25
+    # Reward based on movement
+    desired_speed = 25
     speed = current["forward_speed"] * 3.8
+    speed_reward = 0
+    if speed > 1.0:
+        speed_reward = 1.1 - abs((speed - desired_speed) / desired_speed)
+    reward = speed_reward
 
-    # Reward moving forward (up to target speed)
-    if speed >= 1:
-        speedReward = 0.1 + np.clip(speed, 0.0, desiredSpeed) / desiredSpeed
+    # Apply otherlane penalty
+    otherlane = current["intersection_otherlane"]
+    if otherlane > 0:
+        reward -= 0.2 + speed_reward * otherlane * 1.2
 
-        # Penalize going over desired, will become negative at 1.5x desired
-        if speed > desiredSpeed:
-            speedReward -= 2 * (speed - desiredSpeed) / desiredSpeed
-        else:
-            offroad = max(current["intersection_offroad"], current["intersection_otherlane"])
-            speedReward *= 1 - (offroad * 2)
-
-        # Add reward
-        stepReward += speedReward
+    # Apply offroad penalty (full offroad will completely convert speed reward into a penalty)
+    offroad = current["intersection_offroad"]
+    if offroad > 0:
+        reward -= 0.5 + speed_reward * offroad * 2
 
     # Collision penalty
     if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
-        stepReward -= 1 + (speed ** 2) / 10.0
+        reward -= speed ** 2
 
-    return stepReward
+    # Apply slight penalty for turning, more penalty for larger turns
+    reward -= (current["control"]["steer"] ** 2) / 4
+
+    # Apply slight penalty for slamming breaks/gas, more penalty for larger values
+    reward -= (current["control"]["throttle"] ** 2) / 100
+    reward -= (current["control"]["brake"] ** 2) / 100
+
+    return reward
 
 
 REWARD_CORL2017 = "corl2017"

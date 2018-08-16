@@ -27,7 +27,6 @@ def main():
         "x_res": 100,
         "y_res": 100,
         "use_depth_camera": False,
-        "discrete_actions": True,
         "server_map": "/Game/Maps/Town02",
         "reward_function": rewards.REWARD_LANE_KEEP,
         "enable_planner": False,
@@ -35,7 +34,7 @@ def main():
         terminations.EARLY_TERMINATIONS: [
             terminations.TERMINATE_ON_COLLISION,
             terminations.TERMINATE_ON_OFFROAD,
-            terminations.TERMINATE_ON_OTHERLANE,
+            # terminations.TERMINATE_ON_OTHERLANE,
             terminations.TERMINATE_NO_MOVEMENT],
         "scenarios": scenarios.TOWN2_LANE_KEEP,
     })
@@ -43,22 +42,22 @@ def main():
 
     # Create an OpenAI-deepq baseline
     model = deepq.models.cnn_to_mlp(
-        convs=[(32, 3, 2), (32, 3, 2), (64, 5, 2),  (128, 5, 1)],
-        hiddens=[512],
+        convs=[(32, 3, 2), (32, 3, 2), (64, 5, 2), (128, 5, 1)],
+        hiddens=[512, 512],
         dueling=True
     )
 
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
-        "gpu_memory_fraction": 0.55,
+        "gpu_memory_fraction": 0.5,
         "lr": 1e-4,
         "max_timesteps": int(1e6),
         "buffer_size": int(1e4),
         "exploration_fraction": 0.1,
         "exploration_final_eps": 0.1,
         "train_freq": 4,
-        "learning_starts": 1000,
+        "learning_starts": 100,
         "target_network_update_freq": 1000,
         "gamma": 0.99,
         "prioritized_replay": True,

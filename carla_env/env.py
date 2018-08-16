@@ -89,64 +89,15 @@ ENV_CONFIG = {
     "y_res": 80,
     "server_map": "/Game/Maps/Town02",
     "scenarios": [DEFAULT_SCENARIO],
-    "discrete_actions": True,
     "squash_action_logits": False,
 }
 
+ALL_SPEEDS = [-1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0]
+ALL_TURNS = [-0.4, -0.1, -0.025, 0, 0.025, 0.1, 0.4]
+ALL_ACTIONS = [[speed, turn] for speed in ALL_SPEEDS for turn in ALL_TURNS]
+DISCRETE_ACTIONS = {i: ALL_ACTIONS[i] for i in range(len(ALL_ACTIONS))}
 
-DISCRETE_ACTIONS = {
-    # coast
-    0: [0.0, 0.0],
-
-    # forward
-    1: [1.00, 0.0],
-    2: [0.75, 0.0],
-    3: [0.50, 0.0],
-    4: [0.25, 0.0],
-
-    # hard left
-    5: [1.00, -0.5],
-    6: [0.75, -0.5],
-    7: [0.50, -0.5],
-    8: [0.25, -0.5],
-
-    # slight left
-     9: [1.00, -0.2],
-    10: [0.75, -0.2],
-    11: [0.50, -0.2],
-    12: [0.25, -0.2],
-
-    # right left
-    13: [1.00, 0.5],
-    14: [0.75, 0.5],
-    15: [0.50, 0.5],
-    16: [0.25, 0.5],
-
-    # right left
-    17: [1.00, 0.2],
-    18: [0.75, 0.2],
-    19: [0.50, 0.2],
-    20: [0.25, 0.2],
-
-    # brake
-    21: [-1.00, 0.0],
-    22: [-0.75, 0.0],
-    23: [-0.50, 0.0],
-    24: [-0.25, 0.0],
-
-    # brake left
-    25: [-1.00, -0.5],
-    26: [-0.75, -0.5],
-    27: [-0.50, -0.5],
-    28: [-0.25, -0.5],
-
-    # brake right
-    29: [-1.00, 0.5],
-    30: [-0.75, 0.5],
-    31: [-0.50, 0.5],
-    32: [-0.25, 0.5],
-}
-
+# Number of classifications from the pixel parser
 NUM_CLASSIFICATIONS = 13
 
 
@@ -170,17 +121,7 @@ class CarlaEnv(gym.Env):
         if self.config["enable_planner"]:
             self.planner = Planner(self.city)
 
-        if config["discrete_actions"]:
-            self.action_space = Discrete(len(DISCRETE_ACTIONS))
-        else:
-            self.action_space = Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
-
-        # TODO -----> Possible to have speed in observation space?
-        # Depth camera
-        # image_space = Box(
-        #     -1.0, 1.0, shape=(
-        #         config["y_res"], config["x_res"],
-        #         1 * config["framestack"]), dtype=np.float32)
+        self.action_space = Discrete(len(DISCRETE_ACTIONS))
 
         # RGB Camera
         self.frame_shape = (config["y_res"], config["x_res"])
@@ -188,11 +129,6 @@ class CarlaEnv(gym.Env):
             0, 1, shape=(
                 config["y_res"], config["x_res"],
                 NUM_CLASSIFICATIONS * config["framestack"]), dtype=np.float32)
-
-        # self.observation_space = Tuple(  # forward_speed, dist to goal
-        #     [image_space,
-        #      Discrete(len(COMMANDS_ENUM)),  # next_command
-        #      Box(-128.0, 128.0, shape=(2,), dtype=np.float32)])
         self.observation_space = image_space
 
         # TODO(ekl) this isn't really a proper gym spec
@@ -365,8 +301,7 @@ class CarlaEnv(gym.Env):
             return (self.last_obs, 0.0, True, {})
 
     def _step(self, action):
-        if self.config["discrete_actions"]:
-            action = DISCRETE_ACTIONS[int(action)]
+        action = DISCRETE_ACTIONS[int(action)]
         assert len(action) == 2, "Invalid action {}".format(action)
         if self.config["squash_action_logits"]:
             forward = 2 * float(sigmoid(action[0]) - 0.5)
@@ -637,10 +572,7 @@ if __name__ == "__main__":
         total_reward = 0.0
         while not done:
             i += 1
-            if ENV_CONFIG["discrete_actions"]:
-                obs, reward, done, info = env.step(1)
-            else:
-                obs, reward, done, info = env.step([0, 1, 0])
+            obs, reward, done, info = env.step(1)
             total_reward += reward
             print(i, "rew", reward, "total", total_reward, "done", done)
         print("{} fps".format(100 / (time.time() - start)))

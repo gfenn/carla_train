@@ -11,14 +11,14 @@ def terminate_on_collision(curr, prev):
 # so long as they move inwards.
 def terminate_on_otherlane(curr, prev):
     bounded = (
-        curr["intersection_otherlane"] > 0.9
+        curr["intersection_otherlane"] > 0.99
     )
     return bool(bounded)
 
 
 def terminate_on_offroad(curr, prev):
     bounded = (
-        curr["intersection_offroad"] > 0.90
+        curr["intersection_offroad"] > 0.50
     )
     return bool(bounded)
 
