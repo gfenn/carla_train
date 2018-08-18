@@ -28,13 +28,13 @@ def terminate_no_movement(curr, prev):
     curr["tracking_no_movement"] = tracking_no_move + 1
 
     # Apply filter
-    BETA = 0.97
+    BETA = 0.99
     running_total = prev.get("tracking_no_movement_running", 0)
     new_running_total = running_total * BETA + curr["forward_speed"] * (1 - BETA)
     curr["tracking_no_movement_running"] = new_running_total
 
     # Bad?
-    return tracking_no_move > 300 and new_running_total < 1
+    return tracking_no_move > 200 and new_running_total < 0.5
 
 
 EARLY_TERMINATIONS = "early_terminations"

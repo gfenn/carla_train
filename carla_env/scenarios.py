@@ -119,5 +119,5 @@ TOWN2_ALL = (
     TOWN2_NAVIGATION_DYNAMIC)
 
 TOWN2_LANE_KEEP = [
-    build_scenario("Town02", start, end, 10, 10, 1000, TRAIN_WEATHERS)
+    build_scenario("Town02", start, end, 10, 10, 2000, TRAIN_WEATHERS)
     for (start, end) in POSES_TOWN2_STRAIGHT + POSES_TOWN2_ONE_CURVE]

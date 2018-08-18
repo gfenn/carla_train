@@ -90,6 +90,7 @@ ENV_CONFIG = {
     "server_map": "/Game/Maps/Town02",
     "scenarios": [DEFAULT_SCENARIO],
     "squash_action_logits": False,
+    "server_restart_interval": 50,
 }
 
 ALL_SPEEDS = [-1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0]
@@ -153,6 +154,7 @@ class CarlaEnv(gym.Env):
         self.last_obs = None
         self.framestack = [None] * config["framestack"]
         self.framestack_index = 0
+        self.running_restarts = 0
 
     def init_server(self):
         print("Initializing new Carla server...")
@@ -195,15 +197,26 @@ class CarlaEnv(gym.Env):
 
     def reset(self):
         error = None
+        self.running_restarts += 1
         for _ in range(RETRIES_ON_ERROR):
             try:
+                # Force a full reset of Carla after some number of restarts
+                if self.running_restarts > self.config["server_restart_interval"]:
+                    print("Shutting down carla server...")
+                    self.running_restarts = 0
+                    self.clear_server_state()
+
+                # If server down, initialize
                 if not self.server_process:
                     self.init_server()
+
+                # Run episode reset
                 return self._reset()
             except Exception as e:
                 print("Error during reset: {}".format(traceback.format_exc()))
                 self.clear_server_state()
                 error = e
+                time.sleep(5)
         raise error
 
     def _build_camera(self, name, post):
@@ -263,6 +276,14 @@ class CarlaEnv(gym.Env):
         self.client.start_episode(self.scenario["start_pos_id"])
 
         image, py_measurements = self._read_observation()
+        py_measurements["control"] = {
+            "throttle_brake": 0,
+            "steer": 0,
+            "throttle": 0,
+            "brake": 0,
+            "reverse": False,
+            "hand_brake": False,
+        }
         self.prev_measurement = py_measurements
         return self.encode_obs(self.preprocess_image(image), py_measurements)
 
@@ -333,6 +354,7 @@ class CarlaEnv(gym.Env):
         else:
             py_measurements["action"] = action
         py_measurements["control"] = {
+            "throttle_brake": action[1],
             "steer": steer,
             "throttle": throttle,
             "brake": brake,

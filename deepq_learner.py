@@ -285,9 +285,7 @@ class DeepqLearner:
                         self.saved_mean_reward, mean_100ep_reward))
                     self.saved_mean_reward = mean_100ep_reward
                     self.saved_episode_num = self.num_episodes
-
-            # Save anyway lol
-            save_state(self.model_file)
+                    save_state(self.model_file)
 
     def save(self, save_path):
         print("Saving model to " + save_path)

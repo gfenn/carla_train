@@ -55,14 +55,15 @@ def compute_reward_lane_keep(env, prev, current):
 
     # Collision penalty
     if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
-        reward -= speed ** 2
+        reward -= 10 + (speed ** 2) / 2
 
     # Apply slight penalty for turning, more penalty for larger turns
-    reward -= (current["control"]["steer"] ** 2) / 4
+    steer_delta = abs(current["control"]["steer"] - prev["control"]["steer"])
+    reward -= (steer_delta ** 2) / 2
 
     # Apply slight penalty for slamming breaks/gas, more penalty for larger values
-    reward -= (current["control"]["throttle"] ** 2) / 100
-    reward -= (current["control"]["brake"] ** 2) / 100
+    throttle_delta = abs(current["control"]["throttle_brake"] - prev["control"]["throttle_brake"])
+    reward -= (throttle_delta ** 2) / 10
 
     return reward
 
