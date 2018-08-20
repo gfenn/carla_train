@@ -77,7 +77,7 @@ def compute_reward_refined_lane(env, prev, current):
     # If partially offroad, apply a penalty
     offroad = current["intersection_offroad"]
     if offroad > 0:
-        reward -= 0.2 + offroad * 2
+        reward -= 0.2 + offroad * 10
 
     # If partially out of the lane, apply a penalty
     otherlane = current["intersection_otherlane"]

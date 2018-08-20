@@ -51,7 +51,7 @@ def main():
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
         "gpu_memory_fraction": 0.5,
-        "lr": 1e-4,
+        "lr": 1e-5,
         "max_timesteps": int(1e6),
         "buffer_size": int(8e3),
         "exploration_fraction": 0.1,
