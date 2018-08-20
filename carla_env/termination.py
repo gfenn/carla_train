@@ -28,7 +28,7 @@ def terminate_no_movement(curr, prev):
     curr["tracking_no_movement"] = tracking_no_move + 1
 
     # Apply filter
-    BETA = 0.99
+    BETA = 0.995
     running_total = prev.get("tracking_no_movement_running", 0)
     new_running_total = running_total * BETA + curr["forward_speed"] * (1 - BETA)
     curr["tracking_no_movement_running"] = new_running_total

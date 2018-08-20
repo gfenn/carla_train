@@ -68,6 +68,44 @@ def compute_reward_lane_keep(env, prev, current):
     return reward
 
 
+
+def compute_reward_refined_lane(env, prev, current):
+    # Reward based on movement
+    desired_speed = 25
+    reward = 0
+
+    # If partially offroad, apply a penalty
+    offroad = current["intersection_offroad"]
+    if offroad > 0:
+        reward -= 0.2 + offroad * 2
+
+    # If partially out of the lane, apply a penalty
+    otherlane = current["intersection_otherlane"]
+    if otherlane > 0:
+        reward -= 0.1 + otherlane
+
+    # Provide a speed reward IF FULLY IN LANE ONLY
+    # Reward peaks at desired speed, becoming negative if speed too high
+    speed = current["forward_speed"] * 3.8
+    if offroad == 0 and otherlane == 0:
+        # When at 0, receive very slight negative reward
+        reward += 1 - abs((speed - desired_speed - 0.01) / desired_speed)
+
+    # Collision penalty
+    if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
+        reward -= 10 + (speed ** 2) / 2
+
+    # Apply slight penalty for turning, more penalty for larger turns
+    steer_delta = abs(current["control"]["steer"] - prev["control"]["steer"])
+    reward -= (steer_delta ** 2) / 2
+
+    # Apply slight penalty for slamming breaks/gas, more penalty for larger values
+    throttle_delta = abs(current["control"]["throttle_brake"] - prev["control"]["throttle_brake"])
+    reward -= (throttle_delta ** 2) / 10
+
+    return reward
+
+
 REWARD_CORL2017 = "corl2017"
 REWARD_CUSTOM = "custom"
 REWARD_LANE_KEEP = "lane_keep"
