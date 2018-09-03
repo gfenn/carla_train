@@ -89,7 +89,7 @@ def compute_reward_refined_lane(env, prev, current):
     speed = current["forward_speed"] * 3.8
     if offroad == 0 and otherlane == 0:
         # When at 0, receive very slight negative reward
-        reward += 1 - abs((speed - desired_speed - 0.01) / desired_speed)
+        reward += 1 - abs((speed - desired_speed - 0.05) / desired_speed)
 
     # Collision penalty
     if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
