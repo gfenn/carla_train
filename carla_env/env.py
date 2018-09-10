@@ -22,7 +22,7 @@ except Exception:
     pass
 
 import gym
-from gym.spaces import Box, Discrete, Tuple
+from gym.spaces import Box, Discrete
 
 from carla_env.scenarios import DEFAULT_SCENARIO
 from carla_env.rewards import compute_reward
@@ -155,6 +155,8 @@ class CarlaEnv(gym.Env):
         self.framestack = [None] * config["framestack"]
         self.framestack_index = 0
         self.running_restarts = 0
+        self.on_step = None
+        self.on_next = None
 
     def init_server(self):
         print("Initializing new Carla server...")
@@ -196,6 +198,9 @@ class CarlaEnv(gym.Env):
         self.clear_server_state()
 
     def reset(self):
+        if self.on_next is not None:
+            self.on_next()
+
         error = None
         self.running_restarts += 1
         for _ in range(RETRIES_ON_ERROR):
@@ -371,6 +376,10 @@ class CarlaEnv(gym.Env):
                 TERM.compute_termination(self, py_measurements, self.prev_measurement))
         py_measurements["done"] = done
         self.prev_measurement = py_measurements
+
+        # Callback
+        if self.on_step is not None:
+            self.on_step(py_measurements)
 
         # Write out measurements to file
         if self.config["carla_out_path"]:

@@ -39,19 +39,21 @@ def compute_reward_lane_keep(env, prev, current):
     desired_speed = 25
     speed = current["forward_speed"] * 3.8
     speed_reward = 0
-    if speed > 1.0:
-        speed_reward = 1.1 - abs((speed - desired_speed) / desired_speed)
+    if speed >= 5.0:
+        speed_reward = 1.0 - abs((speed - desired_speed) / desired_speed)
+    else:
+        speed_reward = -1
     reward = speed_reward
 
     # Apply otherlane penalty
     otherlane = current["intersection_otherlane"]
     if otherlane > 0:
-        reward -= 0.2 + speed_reward * otherlane * 1.2
+        reward -= 0.2 + abs(speed_reward) * otherlane * 1.2
 
     # Apply offroad penalty (full offroad will completely convert speed reward into a penalty)
     offroad = current["intersection_offroad"]
     if offroad > 0:
-        reward -= 0.5 + speed_reward * offroad * 2
+        reward -= 0.5 + abs(speed_reward) * offroad * 2
 
     # Collision penalty
     if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
