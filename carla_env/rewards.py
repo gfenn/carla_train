@@ -41,6 +41,10 @@ def compute_reward_lane_keep(env, prev, current):
     speed_reward = 0
     if speed >= 5.0:
         speed_reward = 1.0 - abs((speed - desired_speed) / desired_speed)
+    elif speed >= 2.5:
+        speed_reward = -0.25
+    elif speed >= 1:
+        speed_reward = -0.5
     else:
         speed_reward = -1
     reward = speed_reward

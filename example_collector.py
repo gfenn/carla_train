@@ -1,7 +1,7 @@
 
 
 FPS = 10
-OUT_LANE_RESET = 3 * FPS
+OUT_LANE_RESET = 2 * FPS
 
 class EpisodeCollector:
 
@@ -58,7 +58,7 @@ class EpisodeData:
         self.speed_counter = 0.0
         self.is_out_of_lane = False
         self.out_of_lane_instances = 0
-        self.current_outoflane_steps = 0
+        self.out_of_lane_cooldown = 0
         self.reward = 0
 
     def step(self, py_measurements):
@@ -75,15 +75,13 @@ class EpisodeData:
         self.reward += py_measurements["reward"]
 
         # Out of lane counter
-        is_out_of_lane = py_measurements["intersection_offroad"] > 0 \
-                         or py_measurements["intersection_otherlane"] > 0
-        if is_out_of_lane:
-            # Going out of lane?
-            if not self.is_out_of_lane or self.current_outoflane_steps > OUT_LANE_RESET:
-                self.out_of_lane_instances += 1
-                self.current_outoflane_steps = 1
-            else:
-                self.current_outoflane_steps += 1
+        is_out_of_lane = py_measurements["intersection_offroad"] > 0.05 \
+                         or py_measurements["intersection_otherlane"] > 0.05
+        if is_out_of_lane and self.out_of_lane_cooldown <= 0:
+            self.out_of_lane_cooldown = OUT_LANE_RESET + 1
+            self.out_of_lane_instances += 1
+        if self.out_of_lane_cooldown > 0:
+            self.out_of_lane_cooldown -= 1
         self.is_out_of_lane = is_out_of_lane
 
     def csv_header(self):
