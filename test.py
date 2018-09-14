@@ -8,7 +8,7 @@ from baselines import deepq
 import deepq_learner
 
 
-MAX_EPISODES = 1000
+MAX_EPISODES = 10
 
 def main():
     # Filenames
@@ -27,13 +27,13 @@ def main():
         "carla_out_path": carla_out_path,
         "log_images": False,
         "convert_images_to_video": False,
-        "x_res": 100,
-        "y_res": 100,
+        "x_res": 120,
+        "y_res": 120,
         "use_depth_camera": False,
         "server_map": "/Game/Maps/Town01",
         "reward_function": rewards.REWARD_LANE_KEEP,
         "enable_planner": False,
-        "framestack": 4,
+        "framestack": 2,
         terminations.EARLY_TERMINATIONS: [
             terminations.TERMINATE_ON_COLLISION,
             terminations.TERMINATE_ON_OFFROAD,

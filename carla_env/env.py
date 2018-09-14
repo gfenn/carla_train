@@ -129,7 +129,7 @@ class CarlaEnv(gym.Env):
         image_space = Box(
             0, 1, shape=(
                 config["y_res"], config["x_res"],
-                NUM_CLASSIFICATIONS * config["framestack"]), dtype=np.float32)
+                (NUM_CLASSIFICATIONS + 1) * config["framestack"]), dtype=np.float32)
         self.observation_space = image_space
 
         # TODO(ekl) this isn't really a proper gym spec
@@ -249,10 +249,11 @@ class CarlaEnv(gym.Env):
         self.weather = random.choice(self.scenario["weather_distribution"])
         settings.set(
             SynchronousMode=True,
-            SendNonPlayerAgentsInfo=True,
+            SendNonPlayerAgentsInfo=False,
             NumberOfVehicles=self.scenario["num_vehicles"],
             NumberOfPedestrians=self.scenario["num_pedestrians"],
-            WeatherId=self.weather)
+            WeatherId=self.weather,
+            QualityLevel="Low")
         settings.randomize_seeds()
 
         # Add the cameras
@@ -436,25 +437,9 @@ class CarlaEnv(gym.Env):
             print(ex)
 
     def preprocess_image(self, image):
-        # if self.config["use_depth_camera"]:
-        #     assert self.config["use_depth_camera"]
-        #     data = (image.data - 0.5) * 2
-        #     data = data.reshape(
-        #         self.config["render_y_res"], self.config["render_x_res"], 1)
-        #     data = cv2.resize(
-        #         data, (self.config["x_res"], self.config["y_res"]),
-        #         interpolation=cv2.INTER_AREA)
-        #     data = np.expand_dims(data, 2)
-        # else:
-        #     data = image.data.reshape(
-        #         self.config["render_y_res"], self.config["render_x_res"], 3)
-        #     data = cv2.resize(
-        #         data, (self.config["x_res"], self.config["y_res"]),
-        #         interpolation=cv2.INTER_AREA)
-        #     data = (data.astype(np.float32) - 128) / 128
         return image
 
-    def _fuse_depth_class(self, depth, clazz):
+    def _fuse_observations(self, depth, clazz, speed):
         # Resize each
         depth_reshape = depth.reshape(self.config["render_y_res"], self.config["render_x_res"])
         depth = cv2.resize(depth_reshape, (self.config["x_res"], self.config["y_res"]))
@@ -462,12 +447,13 @@ class CarlaEnv(gym.Env):
         clazz_reshape = clazz.reshape(self.config["render_y_res"], self.config["render_x_res"])
         clazz = cv2.resize(clazz_reshape, (self.config["x_res"], self.config["y_res"]))
 
-        shape = (depth.shape[0], depth.shape[1], NUM_CLASSIFICATIONS)
+        shape = (depth.shape[0], depth.shape[1], NUM_CLASSIFICATIONS + 1)
         obs = np.full(shape, 1, dtype=np.float32)
         for x in range(shape[0]):
             for y in range(shape[1]):
                 classification = clazz[x, y]
                 obs[x, y, classification] = depth[x, y]
+                obs[x, y, -1] = speed
 
         return obs
 
@@ -475,19 +461,17 @@ class CarlaEnv(gym.Env):
     def _read_observation(self):
         # Read the data produced by the server this frame.
         measurements, sensor_data = self.client.read_data()
+        cur = measurements.player_measurements
 
         # Print some of the measurements.
         if self.config["verbose"]:
             print_measurements(measurements)
 
-        # observation = None
-        observation = self._fuse_depth_class(sensor_data['CameraDepth'].data, sensor_data['CameraClass'].data)
-        # camera_name = "CameraRGB"
-        # for name, image in sensor_data.items():
-        #     if name == camera_name:
-        #         observation = image
-
-        cur = measurements.player_measurements
+        # Fuse the observation data to create a single observation
+        observation = self._fuse_observations(
+            sensor_data['CameraDepth'].data,
+            sensor_data['CameraClass'].data,
+            cur.forward_speed)
 
         if self.config["enable_planner"]:
             next_command = COMMANDS_ENUM[

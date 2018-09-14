@@ -24,13 +24,13 @@ def main():
         "carla_out_path": carla_out_path,
         "log_images": False,
         "convert_images_to_video": False,
-        "x_res": 100,
-        "y_res": 100,
+        "x_res": 120,
+        "y_res": 120,
         "use_depth_camera": False,
         "server_map": "/Game/Maps/Town02",
         "reward_function": rewards.REWARD_LANE_KEEP,
         "enable_planner": False,
-        "framestack": 4,
+        "framestack": 2,
         terminations.EARLY_TERMINATIONS: [
             terminations.TERMINATE_ON_COLLISION,
             terminations.TERMINATE_ON_OFFROAD,
@@ -50,10 +50,10 @@ def main():
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
-        "gpu_memory_fraction": 0.5,
+        "gpu_memory_fraction": 0.7,
         "lr": 1e-5,
         "max_timesteps": int(2e6),
-        "buffer_size": int(8e3),
+        "buffer_size": int(1e4),
         "exploration_fraction": 0.1,
         "exploration_final_eps": 0.1,
         "train_freq": 4,

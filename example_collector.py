@@ -53,8 +53,10 @@ class EpisodeData:
         self.steps = 0
         self.offroad_counter = 0.0
         self.otherlane_counter = 0.0
-        self.was_collision = False
-        self.max_speed = 0
+        self.collision_vehicle = 0
+        self.collision_pedestrian = 0
+        self.collision_other = 0
+        self.max_speed = 0.0
         self.speed_counter = 0.0
         self.is_out_of_lane = False
         self.out_of_lane_instances = 0
@@ -66,9 +68,12 @@ class EpisodeData:
         self.steps += 1
         self.offroad_counter += py_measurements["intersection_offroad"]
         self.otherlane_counter += py_measurements["intersection_otherlane"]
-        self.was_collision = self.was_collision or (py_measurements["collision_vehicles"] > 0
-                                                    or py_measurements["collision_pedestrians"] > 0
-                                                    or py_measurements["collision_other"] > 0)
+        if py_measurements["collision_vehicles"] > 0:
+            self.collision_vehicle = True
+        if py_measurements["collision_pedestrians"] > 0:
+            self.collision_pedestrian = True
+        if py_measurements["collision_other"] > 0:
+            self.collision_other = True
         speed = py_measurements["forward_speed"] * 3.8
         self.speed_counter += speed
         self.max_speed = max(self.max_speed, speed)
@@ -85,15 +90,18 @@ class EpisodeData:
         self.is_out_of_lane = is_out_of_lane
 
     def csv_header(self):
-        return "Steps,Offroad Percent,Otherlane Percent,Was Collision,Average Speed,Max Speed,OOL Instances,Reward"
+        return "Steps,Offroad Percent,Otherlane Percent,Average Speed,Max Speed,OOL Instances," \
+               "Collision - Vehicle,Collision - Pedestrian,Collision - Other,Reward"
 
     def csv_data(self):
         return [
             self.steps,
             self.offroad_counter / self.steps,
             self.otherlane_counter / self.steps,
-            1.0 if self.was_collision else 0.0,
             self.speed_counter / self.steps,
             self.max_speed,
             self.out_of_lane_instances,
+            self.collision_vehicle,
+            self.collision_pedestrian,
+            self.collision_other,
             self.reward]
