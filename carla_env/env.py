@@ -100,6 +100,14 @@ DISCRETE_ACTIONS = {i: ALL_ACTIONS[i] for i in range(len(ALL_ACTIONS))}
 
 # Number of classifications from the pixel parser
 NUM_CLASSIFICATIONS = 13
+KEEP_CLASSES = [
+    [0],  # None
+    [1, 2, 3, 4, 5, 9, 10, 11, 12],  # Misc
+    [6],  # Road lines
+    [7],  # Roads
+    [8]  # Sidewalks
+]
+FRAME_DEPTH = len(KEEP_CLASSES) + 1
 
 
 live_carla_processes = set()
@@ -129,7 +137,7 @@ class CarlaEnv(gym.Env):
         image_space = Box(
             0, 1, shape=(
                 config["y_res"], config["x_res"],
-                (NUM_CLASSIFICATIONS + 1) * config["framestack"]), dtype=np.float32)
+                FRAME_DEPTH * config["framestack"]), dtype=np.float32)
         self.observation_space = image_space
 
         # TODO(ekl) this isn't really a proper gym spec
@@ -444,14 +452,25 @@ class CarlaEnv(gym.Env):
         depth_reshape = depth.reshape(self.config["render_y_res"], self.config["render_x_res"])
         depth = cv2.resize(depth_reshape, (self.config["x_res"], self.config["y_res"]))
 
+        # TODO - this needs to be ensured not to fuck up classes.  Max pool?
         clazz_reshape = clazz.reshape(self.config["render_y_res"], self.config["render_x_res"])
         clazz = cv2.resize(clazz_reshape, (self.config["x_res"], self.config["y_res"]))
 
-        shape = (depth.shape[0], depth.shape[1], NUM_CLASSIFICATIONS + 1)
+        shape = (depth.shape[0], depth.shape[1], FRAME_DEPTH)
+        clazz_reduced = np.full((shape[0], shape[1]), 1, dtype=np.int)
+        for x in range(shape[0]):
+            for y in range(shape[1]):
+                pixel_class = clazz[x, y]
+                for depth in range(FRAME_DEPTH-1):
+                    pixel_list = KEEP_CLASSES[depth]
+                    if pixel_class in pixel_list:
+                        clazz_reduced[x, y] = depth
+                        break
+
         obs = np.full(shape, 1, dtype=np.float32)
         for x in range(shape[0]):
             for y in range(shape[1]):
-                classification = clazz[x, y]
+                classification = clazz_reduced[x, y]
                 obs[x, y, classification] = depth[x, y]
                 obs[x, y, -1] = speed
 
