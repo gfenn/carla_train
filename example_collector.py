@@ -20,7 +20,7 @@ class EpisodeCollector:
         self.episodes[-1].step(py_measurements)
 
     def results(self):
-        data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         total = 0.0
         for episode in self.episodes:
             # Ensure a valid episode

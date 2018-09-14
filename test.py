@@ -8,7 +8,7 @@ from baselines import deepq
 import deepq_learner
 
 
-MAX_EPISODES = 10
+MAX_EPISODES = 1000
 
 def main():
     # Filenames
