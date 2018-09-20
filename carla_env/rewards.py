@@ -92,7 +92,7 @@ def compute_reward_refined_lane(env, prev, current):
 
     # Provide a speed reward IF FULLY IN LANE ONLY
     # Reward peaks at desired speed, becoming negative if speed too high
-    speed = current["forward_speed"] * 3.8
+    speed = current["forward_speed"] * 3.6
     if offroad == 0 and otherlane == 0:
         # When at 0, receive very slight negative reward
         reward += 1 - abs((speed - desired_speed - 0.05) / desired_speed)

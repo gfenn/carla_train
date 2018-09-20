@@ -26,6 +26,7 @@ from gym.spaces import Box, Discrete
 
 from carla_env.scenarios import DEFAULT_SCENARIO
 from carla_env.rewards import compute_reward
+from carla_env.classifier_converter import KEEP_CLASSIFICATIONS, reduce_classifications, resize_classifications, fuse_with_depth
 import carla_env.termination as TERM
 
 SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("/usr/share/carla/current/CarlaUE4.sh"))
@@ -99,15 +100,7 @@ ALL_ACTIONS = [[speed, turn] for speed in ALL_SPEEDS for turn in ALL_TURNS]
 DISCRETE_ACTIONS = {i: ALL_ACTIONS[i] for i in range(len(ALL_ACTIONS))}
 
 # Number of classifications from the pixel parser
-NUM_CLASSIFICATIONS = 13
-KEEP_CLASSES = [
-    [0],  # None
-    [1, 2, 3, 4, 5, 9, 10, 11, 12],  # Misc
-    [6],  # Road lines
-    [7],  # Roads
-    [8]  # Sidewalks
-]
-FRAME_DEPTH = len(KEEP_CLASSES) + 1
+FRAME_DEPTH = KEEP_CLASSIFICATIONS + 1
 
 
 live_carla_processes = set()
@@ -265,7 +258,7 @@ class CarlaEnv(gym.Env):
         settings.randomize_seeds()
 
         # Add the cameras
-        settings.add_sensor(self._build_camera(name="CameraRGB", post="SceneFinal"))
+        # settings.add_sensor(self._build_camera(name="CameraRGB", post="SceneFinal"))
         settings.add_sensor(self._build_camera(name="CameraDepth", post="Depth"))
         settings.add_sensor(self._build_camera(name="CameraClass", post="SemanticSegmentation"))
 
@@ -448,32 +441,23 @@ class CarlaEnv(gym.Env):
         return image
 
     def _fuse_observations(self, depth, clazz, speed):
-        # Resize each
-        depth_reshape = depth.reshape(self.config["render_y_res"], self.config["render_x_res"])
-        depth = cv2.resize(depth_reshape, (self.config["x_res"], self.config["y_res"]))
+        base_shape = (self.config["render_y_res"], self.config["render_x_res"])
+        new_shape = (self.config["y_res"], self.config["x_res"])
 
-        # TODO - this needs to be ensured not to fuck up classes.  Max pool?
-        clazz_reshape = clazz.reshape(self.config["render_y_res"], self.config["render_x_res"])
-        clazz = cv2.resize(clazz_reshape, (self.config["x_res"], self.config["y_res"]))
+        # Reduce class
+        clazz = reduce_classifications(clazz)
 
-        shape = (depth.shape[0], depth.shape[1], FRAME_DEPTH)
-        clazz_reduced = np.full((shape[0], shape[1]), 1, dtype=np.int)
-        for x in range(shape[0]):
-            for y in range(shape[1]):
-                pixel_class = clazz[x, y]
-                for depth in range(FRAME_DEPTH-1):
-                    pixel_list = KEEP_CLASSES[depth]
-                    if pixel_class in pixel_list:
-                        clazz_reduced[x, y] = depth
-                        break
+        # Do we need to resize?
+        if base_shape is not new_shape:
+            depth_reshape = depth.reshape(*depth.shape)
+            depth = cv2.resize(depth_reshape, (new_shape[1], new_shape[0]))
+            clazz = resize_classifications(clazz, new_shape)
 
-        obs = np.full(shape, 1, dtype=np.float32)
-        for x in range(shape[0]):
-            for y in range(shape[1]):
-                classification = clazz_reduced[x, y]
-                obs[x, y, classification] = depth[x, y]
-                obs[x, y, -1] = speed
+        # Fuse with depth!
+        obs = fuse_with_depth(clazz, depth, extra_layers=1)
 
+        # Fuse with speed!
+        obs[::-1] = speed
         return obs
 
 
