@@ -457,7 +457,7 @@ class CarlaEnv(gym.Env):
         obs = fuse_with_depth(clazz, depth, extra_layers=1)
 
         # Fuse with speed!
-        obs[::-1] = speed
+        obs[:, :, KEEP_CLASSIFICATIONS] = speed
         return obs
 
 

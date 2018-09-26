@@ -24,10 +24,10 @@ def main():
         "carla_out_path": carla_out_path,
         "log_images": False,
         "convert_images_to_video": False,
-        "render_x_res": 120,
-        "render_y_res": 120,
-        "x_res": 120,
-        "y_res": 120,
+        "render_x_res": 158,
+        "render_y_res": 158,
+        "x_res": 158,
+        "y_res": 158,
         "use_depth_camera": False,
         "server_map": "/Game/Maps/Town02",
         "reward_function": rewards.REWARD_LANE_KEEP,
@@ -44,7 +44,7 @@ def main():
 
     # Create an OpenAI-deepq baseline
     model = deepq.models.cnn_to_mlp(
-        convs=[(32, 3, 2), (32, 3, 2), (64, 5, 2), (128, 5, 1)],
+        convs=[(32, 3, 2), (32, 3, 2), (32, 3, 2), (64, 3, 1), (64, 3, 1), (64, 3, 1)],
         hiddens=[512, 512],
         dueling=True
     )
