@@ -24,6 +24,8 @@ def main():
         "carla_out_path": carla_out_path,
         "log_images": False,
         "convert_images_to_video": False,
+        "render_x_res": 120,
+        "render_y_res": 120,
         "x_res": 120,
         "y_res": 120,
         "use_depth_camera": False,
