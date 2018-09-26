@@ -448,7 +448,7 @@ class CarlaEnv(gym.Env):
         clazz = reduce_classifications(clazz)
 
         # Do we need to resize?
-        if base_shape is not new_shape:
+        if base_shape[0] is not new_shape[0] and base_shape[1] is not new_shape[1]:
             depth_reshape = depth.reshape(*depth.shape)
             depth = cv2.resize(depth_reshape, (new_shape[1], new_shape[0]))
             clazz = resize_classifications(clazz, new_shape)

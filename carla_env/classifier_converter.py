@@ -56,7 +56,6 @@ def fuse_with_depth(classifications, depth, extra_layers=0):
     for x in range(shape[0]):
         for y in range(shape[1]):
             classification = classifications[x, y]
-            d = depth[x, y]
             obs[x, y, classification] = depth[x, y]
     return obs
 
