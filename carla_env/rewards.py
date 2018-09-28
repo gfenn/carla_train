@@ -37,7 +37,7 @@ def compute_reward_corl2017(env, prev, current):
 
 def compute_reward_refined_lane(env, prev, current):
     # Reward based on movement
-    desired_speed = 50
+    desired_speed = 25
     reward = 0
 
     # If partially offroad, apply a penalty
