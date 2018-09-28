@@ -92,6 +92,7 @@ ENV_CONFIG = {
     "scenarios": [DEFAULT_SCENARIO],
     "squash_action_logits": False,
     "server_restart_interval": 50,
+    "fps": 50
 }
 
 ALL_SPEEDS = [-1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0]
@@ -165,7 +166,10 @@ class CarlaEnv(gym.Env):
         self.server_port = random.randint(10000, 60000)
         self.server_process = subprocess.Popen(
             [self.config["server_binary"], self.config["server_map"],
-             "-windowed", "-ResX=800", "-ResY=600",
+             "-windowed",
+             "-ResX={}".format(self.config["render_x_res"]),
+             "-ResY={}".format(self.config["render_y_res"]),
+             "-fps={}".format(self.config["fps"]),
              "-carla-server",
              "-carla-world-port={}".format(self.server_port)],
             preexec_fn=os.setsid, stdout=open(os.devnull, "w"))

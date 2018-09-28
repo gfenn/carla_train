@@ -34,50 +34,10 @@ def compute_reward_corl2017(env, prev, current):
     return reward
 
 
-def compute_reward_lane_keep(env, prev, current):
-    # Reward based on movement
-    desired_speed = 25
-    speed = current["forward_speed"] * 3.8
-    speed_reward = 0
-    if speed >= 5.0:
-        speed_reward = 1.0 - abs((speed - desired_speed) / desired_speed)
-    elif speed >= 2.5:
-        speed_reward = -0.25
-    elif speed >= 1:
-        speed_reward = -0.5
-    else:
-        speed_reward = -1
-    reward = speed_reward
-
-    # Apply otherlane penalty
-    otherlane = current["intersection_otherlane"]
-    if otherlane > 0:
-        reward -= 0.2 + abs(speed_reward) * otherlane * 1.2
-
-    # Apply offroad penalty (full offroad will completely convert speed reward into a penalty)
-    offroad = current["intersection_offroad"]
-    if offroad > 0:
-        reward -= 0.5 + abs(speed_reward) * offroad * 2
-
-    # Collision penalty
-    if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
-        reward -= 10 + (speed ** 2) / 2
-
-    # Apply slight penalty for turning, more penalty for larger turns
-    steer_delta = abs(current["control"]["steer"] - prev["control"]["steer"])
-    reward -= (steer_delta ** 2) / 2
-
-    # Apply slight penalty for slamming breaks/gas, more penalty for larger values
-    throttle_delta = abs(current["control"]["throttle_brake"] - prev["control"]["throttle_brake"])
-    reward -= (throttle_delta ** 2) / 10
-
-    return reward
-
-
 
 def compute_reward_refined_lane(env, prev, current):
     # Reward based on movement
-    desired_speed = 25
+    desired_speed = 50
     reward = 0
 
     # If partially offroad, apply a penalty
@@ -96,6 +56,10 @@ def compute_reward_refined_lane(env, prev, current):
     if offroad == 0 and otherlane == 0:
         # When at 0, receive very slight negative reward
         reward += 1 - abs((speed - desired_speed - 0.05) / desired_speed)
+
+    # Push a penalty if exiting road for first time
+    elif prev["intersection_offroad"] == 0 and prev["intersection_otherlane"] == 0:
+        reward -= 1.0
 
     # Collision penalty
     if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
@@ -119,7 +83,7 @@ REWARD_LANE_KEEP = "lane_keep"
 
 REWARD_FUNCTIONS = {
     "corl2017": compute_reward_corl2017,
-    "lane_keep": compute_reward_lane_keep,
+    "lane_keep": compute_reward_refined_lane,
 }
 
 

@@ -45,7 +45,7 @@ def main():
     # Create an OpenAI-deepq baseline
     model = deepq.models.cnn_to_mlp(
         convs=[(32, 3, 2), (32, 3, 2), (32, 3, 2), (64, 3, 1), (64, 3, 1), (64, 3, 1)],
-        hiddens=[512, 512],
+        hiddens=[1024, 1024],
         dueling=True
     )
 
