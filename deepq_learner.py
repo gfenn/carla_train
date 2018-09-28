@@ -176,6 +176,7 @@ class DeepqLearner:
         reset = True
         obs = self.env.reset()
         self.start_time = time.time()
+        self.episode_start_time = time.time()
 
         with tempfile.TemporaryDirectory() as td:
             td = self.config["checkpoint_path"] or td
@@ -274,8 +275,8 @@ class DeepqLearner:
             logger.record_tabular("episode # - saved", self.saved_episode_num)
             logger.record_tabular("steps - total", self.t)
             logger.record_tabular("steps - episode", self.episode_frames)
-            logger.record_tabular("time - ep duration(s)", time.time() - self.episode_start_time)
-            logger.record_tabular("time - remaining(min)", self.estimate_time_remaining())
+            logger.record_tabular("time - ep duration", str(time.time() - self.episode_start_time) + "s")
+            logger.record_tabular("time - remaining", self.estimate_time_remaining())
             logger.dump_tabular()
 
 
