@@ -28,6 +28,7 @@ def main():
         "render_y_res": 158,
         "x_res": 158,
         "y_res": 158,
+        "fps": 50,
         "use_depth_camera": False,
         "server_map": "/Game/Maps/Town02",
         "reward_function": rewards.REWARD_LANE_KEEP,
@@ -44,7 +45,7 @@ def main():
 
     # Create an OpenAI-deepq baseline
     model = deepq.models.cnn_to_mlp(
-        convs=[(32, 3, 2), (32, 3, 2), (32, 3, 2), (64, 3, 1), (64, 3, 1), (64, 3, 1)],
+        convs=[(32, 3, 2), (32, 3, 2), (64, 3, 2), (64, 3, 1), (128, 3, 1), (128, 3, 1)],
         hiddens=[1024, 1024],
         dueling=True
     )
