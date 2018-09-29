@@ -14,7 +14,7 @@ from baselines.common.schedules import LinearSchedule
 from baselines import deepq
 from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from baselines.deepq.utils import ObservationInput
-
+import time
 
 class ActWrapper(object):
     def __init__(self, act, act_params):
@@ -77,6 +77,9 @@ def load(path):
     """
     return ActWrapper.load(path)
 
+MINUTE = 60.0
+HOUR = MINUTE * 60.0
+DAY = HOUR * 24.0
 
 
 DEEPQ_CONFIG = {
@@ -166,10 +169,14 @@ class DeepqLearner:
         self.saved_episode_num = None
         self.episode_frames = 0
         self.model_file = None
+        self.start_time = 0
+        self.episode_start_time = 0
 
     def run(self):
         reset = True
         obs = self.env.reset()
+        self.start_time = time.time()
+        self.episode_start_time = time.time()
 
         with tempfile.TemporaryDirectory() as td:
             td = self.config["checkpoint_path"] or td
@@ -248,6 +255,7 @@ class DeepqLearner:
         self.episode_rewards.append(0.0)
         self.num_episodes += 1
         self.episode_frames = 0
+        self.episode_start_time = time.time()
 
         return self.env.reset()
 
@@ -267,7 +275,36 @@ class DeepqLearner:
             logger.record_tabular("episode # - saved", self.saved_episode_num)
             logger.record_tabular("steps - total", self.t)
             logger.record_tabular("steps - episode", self.episode_frames)
+            logger.record_tabular("time - ep duration", str(time.time() - self.episode_start_time) + "s")
+            logger.record_tabular("time - remaining", self.estimate_time_remaining())
             logger.dump_tabular()
+
+
+    def estimate_time_remaining(self):
+        duration = time.time() - self.start_time
+        if duration <= 0:
+            return "Unknown"
+
+        time_remaining = self.t / duration * (self.config["max_timesteps"] - self.t) / 60.0
+        suffix = ""
+
+        # Format based on time
+        if time_remaining < MINUTE:
+            suffix = " seconds"
+        elif time_remaining < HOUR:
+            suffix = " minutes"
+            time_remaining = time_remaining / MINUTE
+        elif time_remaining < DAY:
+            suffix = " hours"
+            time_remaining = time_remaining / HOUR
+        else:
+            suffix = " days"
+            time_remaining = time_remaining / DAY
+
+        # Round remaining time and return
+        time_remaining = round(time_remaining * 100.0) / 100.0
+        return str(time_remaining) + suffix
+
 
     def attempt_checkpoint(self):
         # Determine if we're going to checkpoint

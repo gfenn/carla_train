@@ -9,6 +9,11 @@ import deepq_learner
 
 
 MAX_EPISODES = 1000
+=======
+class DoneError(BaseException):
+    pass
+
+
 
 def main():
     # Filenames
@@ -27,8 +32,10 @@ def main():
         "carla_out_path": carla_out_path,
         "log_images": False,
         "convert_images_to_video": False,
-        "x_res": 120,
-        "y_res": 120,
+        "render_x_res": 158,
+        "render_y_res": 158,
+        "x_res": 158,
+        "y_res": 158,
         "use_depth_camera": False,
         "server_map": "/Game/Maps/Town01",
         "reward_function": rewards.REWARD_LANE_KEEP,
@@ -48,7 +55,7 @@ def main():
     def on_next():
         collector.next()
         if collector.valid_episodes >= MAX_EPISODES:
-            raise Exception("Done!")
+            raise DoneError()
 
     env = CarlaEnv(env_config)
     env.on_step = on_step
@@ -56,8 +63,8 @@ def main():
 
     # Create an OpenAI-deepq baseline
     model = deepq.models.cnn_to_mlp(
-        convs=[(32, 3, 2), (32, 3, 2), (64, 5, 2), (128, 5, 1)],
-        hiddens=[512, 512],
+        convs=[(32, 3, 2), (32, 3, 2), (32, 3, 2), (64, 3, 1), (64, 3, 1), (64, 3, 1)],
+        hiddens=[1024, 1024],
         dueling=True
     )
 
@@ -85,21 +92,24 @@ def main():
     print("Running training....")
     try:
         learn.run()
+    except DoneError:
+        pass
     except Exception as e:
         print("Training Failed!")
-        print(e)
+        raise e
+    finally:
+        print("Closing environment.")
+        env.close()
 
-    print("Closing environment.")
-    env.close()
+        # Determine results
+        results = collector.results()
+        print(",".join(str(x) for x in results))
+        with open(carla_out_path + '/results.csv', 'w') as file:
+            collector.save(file)
 
     # Save the file
+    print("Saving model.")
     learn.save(model_save_path)
-
-    # Determine results
-    results = collector.results()
-    print(",".join(str(x) for x in results))
-    with open(carla_out_path + '/results.csv', 'w') as file:
-        collector.save(file)
 
 if __name__ == '__main__':
     main()
