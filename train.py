@@ -6,49 +6,54 @@ import carla_env.rewards as rewards
 from baselines import deepq
 import deepq_learner
 
+# Filenames
+carla_out_path = "/media/grant/FastData/carla"
+if not os.path.exists(carla_out_path):
+    os.mkdir(carla_out_path)
+
+# Build the OpenAI-gym ready environment
+TRAIN_CONFIG = ENV_CONFIG.copy()
+TRAIN_CONFIG.update({
+    "verbose": False,
+    "carla_out_path": carla_out_path,
+    "log_images": False,
+    "convert_images_to_video": False,
+    "render_x_res": 158,
+    "render_y_res": 158,
+    "x_res": 158,
+    "y_res": 158,
+    "fps": 50,
+    "use_depth_camera": False,
+    "server_map": "/Game/Maps/Town02",
+    "reward_function": rewards.REWARD_LANE_KEEP,
+    "enable_planner": False,
+    "framestack": 2,
+    terminations.EARLY_TERMINATIONS: [
+        terminations.TERMINATE_ON_COLLISION,
+        terminations.TERMINATE_ON_OFFROAD,
+        # terminations.TERMINATE_ON_OTHERLANE,
+        terminations.TERMINATE_NO_MOVEMENT],
+    "scenarios": scenarios.TOWN2_LANE_KEEP,
+})
+
+
+# Create an OpenAI-deepq baseline
+TRAIN_MODEL = deepq.models.cnn_to_mlp(
+    convs=[(32, 3, 2), (32, 3, 2), (64, 3, 2), (64, 3, 1), (128, 3, 1), (128, 3, 1)],
+    hiddens=[1024, 1024],
+    dueling=True
+)
+
 
 def main():
-    # Filenames
-    carla_out_path = "/media/grant/FastData/carla"
-    if not os.path.exists(carla_out_path):
-        os.mkdir(carla_out_path)
+    # Build env
+    env = CarlaEnv(TRAIN_CONFIG)
+
+    # Determine paths
+    model_save_path = os.path.join(carla_out_path, "model.pkl")
     checkpoint_path = os.path.join(carla_out_path, "checkpoints")
     if not os.path.exists(checkpoint_path):
         os.mkdir(checkpoint_path)
-    model_save_path = os.path.join(carla_out_path, "model.pkl")
-
-    # Build the OpenAI-gym ready environment
-    env_config = ENV_CONFIG.copy()
-    env_config.update({
-        "verbose": False,
-        "carla_out_path": carla_out_path,
-        "log_images": False,
-        "convert_images_to_video": False,
-        "render_x_res": 158,
-        "render_y_res": 158,
-        "x_res": 158,
-        "y_res": 158,
-        "fps": 50,
-        "use_depth_camera": False,
-        "server_map": "/Game/Maps/Town02",
-        "reward_function": rewards.REWARD_LANE_KEEP,
-        "enable_planner": False,
-        "framestack": 2,
-        terminations.EARLY_TERMINATIONS: [
-            terminations.TERMINATE_ON_COLLISION,
-            terminations.TERMINATE_ON_OFFROAD,
-            # terminations.TERMINATE_ON_OTHERLANE,
-            terminations.TERMINATE_NO_MOVEMENT],
-        "scenarios": scenarios.TOWN2_LANE_KEEP,
-    })
-    env = CarlaEnv(env_config)
-
-    # Create an OpenAI-deepq baseline
-    model = deepq.models.cnn_to_mlp(
-        convs=[(32, 3, 2), (32, 3, 2), (64, 3, 2), (64, 3, 1), (128, 3, 1), (128, 3, 1)],
-        hiddens=[1024, 1024],
-        dueling=True
-    )
 
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
@@ -69,7 +74,7 @@ def main():
         "checkpoint_path": checkpoint_path,
         "print_freq": 1
     })
-    learn = deepq_learner.DeepqLearner(env=env, q_func=model, config=learn_config)
+    learn = deepq_learner.DeepqLearner(env=env, q_func=TRAIN_MODEL, config=learn_config)
     learn.run()
 
     env.close()

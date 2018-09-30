@@ -1,54 +1,28 @@
 import os
-from carla_env.env import CarlaEnv, ENV_CONFIG
+from carla_env.env import CarlaEnv
 import carla_env.scenarios as scenarios
-import carla_env.termination as terminations
 import carla_env.rewards as rewards
 from example_collector import EpisodeCollector
-from baselines import deepq
+from train import TRAIN_CONFIG, TRAIN_MODEL
 import deepq_learner
 
 
 MAX_EPISODES = 1000
-=======
+
 class DoneError(BaseException):
     pass
 
 
+# Update the environment for testing components
+TEST_ENV = TRAIN_CONFIG.copy()
+TEST_ENV.update({
+    "server_map": "/Game/Maps/Town01",
+    "reward_function": rewards.REWARD_LANE_KEEP,
+    "scenarios": scenarios.TOWN1_LANE_KEEP,
+})
+
 
 def main():
-    # Filenames
-    carla_out_path = "/media/grant/FastData/carla"
-    if not os.path.exists(carla_out_path):
-        os.mkdir(carla_out_path)
-    checkpoint_path = os.path.join(carla_out_path, "checkpoints")
-    if not os.path.exists(checkpoint_path):
-        os.mkdir(checkpoint_path)
-    model_save_path = os.path.join(carla_out_path, "model.pkl")
-
-    # Build the OpenAI-gym ready environment
-    env_config = ENV_CONFIG.copy()
-    env_config.update({
-        "verbose": False,
-        "carla_out_path": carla_out_path,
-        "log_images": False,
-        "convert_images_to_video": False,
-        "render_x_res": 158,
-        "render_y_res": 158,
-        "x_res": 158,
-        "y_res": 158,
-        "use_depth_camera": False,
-        "server_map": "/Game/Maps/Town01",
-        "reward_function": rewards.REWARD_LANE_KEEP,
-        "enable_planner": False,
-        "framestack": 2,
-        terminations.EARLY_TERMINATIONS: [
-            terminations.TERMINATE_ON_COLLISION,
-            terminations.TERMINATE_ON_OFFROAD,
-            # terminations.TERMINATE_ON_OTHERLANE,
-            terminations.TERMINATE_NO_MOVEMENT],
-        "scenarios": scenarios.TOWN1_LANE_KEEP,
-    })
-
     collector = EpisodeCollector()
     def on_step(py_measurements):
         collector.step(py_measurements)
@@ -57,22 +31,22 @@ def main():
         if collector.valid_episodes >= MAX_EPISODES:
             raise DoneError()
 
-    env = CarlaEnv(env_config)
+    env = CarlaEnv(TEST_ENV)
     env.on_step = on_step
     env.on_next = on_next
 
-    # Create an OpenAI-deepq baseline
-    model = deepq.models.cnn_to_mlp(
-        convs=[(32, 3, 2), (32, 3, 2), (32, 3, 2), (64, 3, 1), (64, 3, 1), (64, 3, 1)],
-        hiddens=[1024, 1024],
-        dueling=True
-    )
+    carla_out_path = "/media/grant/FastData/carla"
+    if not os.path.exists(carla_out_path):
+        os.mkdir(carla_out_path)
+    checkpoint_path = os.path.join(carla_out_path, "checkpoints")
+    if not os.path.exists(checkpoint_path):
+        os.mkdir(checkpoint_path)
 
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
         "gpu_memory_fraction": 0.5,
-        "lr": 1e-60,
+        "lr": 1e-90,
         "max_timesteps": int(1e8),
         "buffer_size": int(1e3),
         "exploration_fraction": 0.000001,
@@ -87,7 +61,7 @@ def main():
         "checkpoint_path": checkpoint_path,
         "print_freq": 1
     })
-    learn = deepq_learner.DeepqLearner(env=env, q_func=model, config=learn_config)
+    learn = deepq_learner.DeepqLearner(env=env, q_func=TRAIN_MODEL, config=learn_config)
 
     print("Running training....")
     try:
@@ -106,10 +80,6 @@ def main():
         print(",".join(str(x) for x in results))
         with open(carla_out_path + '/results.csv', 'w') as file:
             collector.save(file)
-
-    # Save the file
-    print("Saving model.")
-    learn.save(model_save_path)
 
 if __name__ == '__main__':
     main()
