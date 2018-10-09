@@ -262,7 +262,8 @@ class CarlaEnv(gym.Env):
         settings.randomize_seeds()
 
         # Add the cameras
-        # settings.add_sensor(self._build_camera(name="CameraRGB", post="SceneFinal"))
+        if self.config["log_images"]:
+            settings.add_sensor(self._build_camera(name="CameraRGB", post="SceneFinal"))
         settings.add_sensor(self._build_camera(name="CameraDepth", post="Depth"))
         settings.add_sensor(self._build_camera(name="CameraClass", post="SemanticSegmentation"))
 
