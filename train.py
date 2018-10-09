@@ -18,16 +18,16 @@ TRAIN_CONFIG.update({
     "carla_out_path": carla_out_path,
     "log_images": False,
     "convert_images_to_video": False,
-    "render_x_res": 158,
-    "render_y_res": 158,
-    "x_res": 158,
-    "y_res": 158,
+    "render_x_res": 228,
+    "render_y_res": 228,
+    "x_res": 228,
+    "y_res": 228,
     "fps": 50,
     "use_depth_camera": False,
     "server_map": "/Game/Maps/Town02",
     "reward_function": rewards.REWARD_LANE_KEEP,
     "enable_planner": False,
-    "framestack": 2,
+    "framestack": 3,
     terminations.EARLY_TERMINATIONS: [
         terminations.TERMINATE_ON_COLLISION,
         terminations.TERMINATE_ON_OFFROAD,
@@ -39,7 +39,10 @@ TRAIN_CONFIG.update({
 
 # Create an OpenAI-deepq baseline
 TRAIN_MODEL = deepq.models.cnn_to_mlp(
-    convs=[(32, 3, 2), (32, 3, 2), (64, 3, 2), (64, 3, 1), (128, 3, 1), (128, 3, 1)],
+    convs=[(32, 3, 2), (32, 3, 2),
+           (64, 3, 2), (64, 3, 2),
+           (128, 3, 1), (128, 3, 1),
+           (256, 3, 1), (256, 3, 1)],
     hiddens=[1024, 1024],
     dueling=True
 )
@@ -61,7 +64,7 @@ def main():
         "gpu_memory_fraction": 0.7,
         "lr": 1e-5,
         "max_timesteps": int(2e6),
-        "buffer_size": int(1e4),
+        "buffer_size": int(8000),
         "exploration_fraction": 0.1,
         "exploration_final_eps": 0.1,
         "train_freq": 4,
@@ -69,7 +72,7 @@ def main():
         "target_network_update_freq": 1000,
         "gamma": 0.99,
         "prioritized_replay": True,
-        "prioritized_replay_alpha": 0.6,
+        "prioritized_replay_alpha": 0.7,
         "checkpoint_freq": 10,
         "checkpoint_path": checkpoint_path,
         "print_freq": 1

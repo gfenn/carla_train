@@ -59,11 +59,11 @@ def compute_reward_refined_lane(env, prev, current):
 
     # Push a penalty if exiting road for first time
     elif prev["intersection_offroad"] == 0 and prev["intersection_otherlane"] == 0:
-        reward -= 1.0
+        reward -= 5.0
 
     # Collision penalty
     if current["collision_vehicles"] or current["collision_pedestrians"] or current["collision_other"]:
-        reward -= 10 + (speed ** 2) / 2
+        reward -= 200.0 + ((3.6 * prev["forward_speed"]) ** 2) / 2
 
     # Apply slight penalty for turning, more penalty for larger turns
     steer_delta = abs(current["control"]["steer"] - prev["control"]["steer"])
