@@ -78,6 +78,7 @@ ENV_CONFIG = {
     "carla_out_path": CARLA_OUT_PATH,
     "measurements_subdir": "measurements",
     "log_images": True,
+    "log_image_frequency": 1,
     "enable_planner": True,
     "framestack": 2,  # note: only [1, 2] currently supported
     "convert_images_to_video": True,
@@ -92,7 +93,8 @@ ENV_CONFIG = {
     "scenarios": [DEFAULT_SCENARIO],
     "squash_action_logits": False,
     "server_restart_interval": 50,
-    "fps": 50
+    "fps": 50,
+    "quality": "Low",
 }
 
 ALL_SPEEDS = [-1.0, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1.0]
@@ -159,6 +161,8 @@ class CarlaEnv(gym.Env):
         self.running_restarts = 0
         self.on_step = None
         self.on_next = None
+        self.photo_index = 1
+        self.episode_index = 0
 
     def init_server(self):
         print("Initializing new Carla server...")
@@ -233,13 +237,15 @@ class CarlaEnv(gym.Env):
         camera_color = Camera(name, PostProcessing=post)
         camera_color.set_image_size(
             self.config["render_x_res"], self.config["render_y_res"])
-        camera_color.set_position(0.30, 0, 1.30)
+        camera_color.set_position(0.30, 0, 1.50)
+        camera_color.FOV = 60
         return camera_color
 
 
     def _reset(self):
         self.num_steps = 0
         self.total_reward = 0
+        self.episode_index += 1
         self.prev_measurement = None
         self.prev_image = None
         self.episode_id = datetime.today().strftime("%Y-%m-%d_%H-%M-%S_%f")
@@ -258,7 +264,7 @@ class CarlaEnv(gym.Env):
             NumberOfVehicles=self.scenario["num_vehicles"],
             NumberOfPedestrians=self.scenario["num_pedestrians"],
             WeatherId=self.weather,
-            QualityLevel="Low")
+            QualityLevel=self.config["quality"])
         settings.randomize_seeds()
 
         # Add the cameras
@@ -417,31 +423,6 @@ class CarlaEnv(gym.Env):
             self.encode_obs(image, py_measurements), reward, done,
             py_measurements)
 
-    def images_to_video(self, camera_name):
-        # Video directory
-        videos_dir = os.path.join(self.config["carla_out_path"], "Videos" + camera_name)
-        if not os.path.exists(videos_dir):
-            os.makedirs(videos_dir)
-
-        # Build command
-        ffmpeg_cmd = (
-            "ffmpeg -loglevel -8 -r 10 -f image2 -s {x_res}x{y_res} "
-            "-start_number 0 -i "
-            "{img}_%04d.jpg -vcodec libx264 {vid}.mp4 && rm -f {img}_*.jpg "
-        ).format(
-            x_res=self.config["render_x_res"],
-            y_res=self.config["render_y_res"],
-            vid=os.path.join(videos_dir, self.episode_id),
-            img=os.path.join(self.config["carla_out_path"], "Camera" + camera_name, self.episode_id))
-
-        # Execute command
-        print("Executing ffmpeg command: ", ffmpeg_cmd)
-        try:
-            subprocess.call(ffmpeg_cmd, shell=True, timeout=60)
-        except Exception as ex:
-            print("FFMPEG EXPIRED")
-            print(ex)
-
     def preprocess_image(self, image):
         return image
 
@@ -463,7 +444,7 @@ class CarlaEnv(gym.Env):
 
         # Fuse with speed!
         obs[:, :, KEEP_CLASSIFICATIONS] = speed
-        return obs
+        return obs, clazz
 
 
     def _read_observation(self):
@@ -476,7 +457,7 @@ class CarlaEnv(gym.Env):
             print_measurements(measurements)
 
         # Fuse the observation data to create a single observation
-        observation = self._fuse_observations(
+        observation, clazzes = self._fuse_observations(
             sensor_data['CameraDepth'].data,
             sensor_data['CameraClass'].data,
             cur.forward_speed)
@@ -542,19 +523,66 @@ class CarlaEnv(gym.Env):
             "applied_penalty": False,
         }
 
-        if self.config["carla_out_path"] and self.config["log_images"]:
-            for name, image in sensor_data.items():
-                # if name == "CameraRGB":
-                    out_dir = os.path.join(self.config["carla_out_path"], name)
-                    if not os.path.exists(out_dir):
-                        os.makedirs(out_dir)
-                    out_file = os.path.join(
-                        out_dir,
-                        "{}_{:>04}.jpg".format(self.episode_id, self.num_steps))
-                    scipy.misc.imsave(out_file, image.data)
+        if self.config["carla_out_path"] and self.config["log_images"] and self.num_steps % self.config["log_image_frequency"] == 0:
+            self.take_photo(
+                rgb_image=sensor_data["CameraRGB"],
+                class_data=clazzes
+            )
 
         assert observation is not None, sensor_data
         return observation, py_measurements
+
+    def images_dir(self):
+        dir = os.path.join(self.config["carla_out_path"], "images")
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+        return dir
+
+    def episode_dir(self):
+        episode_dir = os.path.join(self.images_dir(), "episode_" + str(self.episode_index))
+        if not os.path.exists(episode_dir):
+            os.mkdir(episode_dir)
+        return episode_dir
+
+    def take_photo(self, rgb_image, class_data):
+        # Get the proper locations\
+        episode_dir = self.episode_dir()
+
+        # Save the image
+        photo_index = self.photo_index
+        self.photo_index += 1
+        image_path = os.path.join(episode_dir, "episode_{}_step_{}_rgb.jpg".format(self.episode_index, photo_index))
+        scipy.misc.imsave(image_path, rgb_image.data)
+
+        # Save the classes
+        class_path = os.path.join(episode_dir, "episode_{}_step_{}_class".format(self.episode_index, photo_index))
+        np.save(class_path, class_data)
+
+
+    def images_to_video(self, camera_name):
+        # Video directory
+        videos_dir = os.path.join(self.config["carla_out_path"], "Videos" + camera_name)
+        if not os.path.exists(videos_dir):
+            os.makedirs(videos_dir)
+
+        # Build command
+        ffmpeg_cmd = (
+            "ffmpeg -loglevel -8 -r 10 -f image2 -s {x_res}x{y_res} "
+            "-start_number 0 -i "
+            "{img}_%04d.jpg -vcodec libx264 {vid}.mp4 && rm -f {img}_*.jpg "
+        ).format(
+            x_res=self.config["render_x_res"],
+            y_res=self.config["render_y_res"],
+            vid=os.path.join(videos_dir, self.episode_id),
+            img=os.path.join(self.config["carla_out_path"], "Camera" + camera_name, self.episode_id))
+
+        # Execute command
+        print("Executing ffmpeg command: ", ffmpeg_cmd)
+        try:
+            subprocess.call(ffmpeg_cmd, shell=True, timeout=60)
+        except Exception as ex:
+            print("FFMPEG EXPIRED")
+            print(ex)
 
 
 def print_measurements(measurements):

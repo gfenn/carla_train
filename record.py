@@ -19,9 +19,11 @@ RECORD_ENV.update({
     "reward_function": rewards.REWARD_LANE_KEEP,
     "scenarios": scenarios.TOWN1_LANE_KEEP,
     "log_images": True,
-    "convert_images_to_video": True,
-    "render_x_res": 632,
-    "render_y_res": 632,
+    "log_image_frequency": 10,
+    "convert_images_to_video": False,
+    # "render_x_res": 632,
+    # "render_y_res": 632,
+    "quality": "Epic"
 })
 
 
