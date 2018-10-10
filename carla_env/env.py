@@ -523,7 +523,10 @@ class CarlaEnv(gym.Env):
             "applied_penalty": False,
         }
 
-        if self.config["carla_out_path"] and self.config["log_images"] and self.num_steps % self.config["log_image_frequency"] == 0:
+        if self.config["carla_out_path"] \
+                and self.config["log_images"] \
+                and self.num_steps % self.config["log_image_frequency"] == 0\
+                and self.num_steps > 0:
             self.take_photo(
                 rgb_image=sensor_data["CameraRGB"],
                 class_data=clazzes
@@ -551,11 +554,11 @@ class CarlaEnv(gym.Env):
         # Save the image
         photo_index = self.photo_index
         self.photo_index += 1
-        image_path = os.path.join(episode_dir, "episode_{}_step_{}_rgb.jpg".format(self.episode_index, photo_index))
+        image_path = os.path.join(episode_dir, "episode_{:>04}_step_{:>04}_rgb.jpg".format(self.episode_index, photo_index))
         scipy.misc.imsave(image_path, rgb_image.data)
 
         # Save the classes
-        class_path = os.path.join(episode_dir, "episode_{}_step_{}_class".format(self.episode_index, photo_index))
+        class_path = os.path.join(episode_dir, "episode_{:>04}_step_{:>04}_class".format(self.episode_index, photo_index))
         np.save(class_path, class_data)
 
 

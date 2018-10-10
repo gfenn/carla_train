@@ -16,13 +16,15 @@ TRAIN_CONFIG = ENV_CONFIG.copy()
 TRAIN_CONFIG.update({
     "verbose": False,
     "carla_out_path": carla_out_path,
-    "log_images": False,
+    "log_images": True,
+    "log_image_frequency": 10,
     "convert_images_to_video": False,
     "render_x_res": 228,
     "render_y_res": 228,
     "x_res": 228,
     "y_res": 228,
     "fps": 50,
+    "quality": "Epic",
     "use_depth_camera": False,
     "server_map": "/Game/Maps/Town02",
     "reward_function": rewards.REWARD_LANE_KEEP,
@@ -62,7 +64,7 @@ def main():
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
         "gpu_memory_fraction": 0.7,
-        "lr": 1e-5,
+        "lr": 1e-4,
         "max_timesteps": int(2e6),
         "buffer_size": int(8000),
         "exploration_fraction": 0.1,
