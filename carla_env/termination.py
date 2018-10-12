@@ -3,7 +3,7 @@ def terminate_on_collision(curr, prev):
     collided = (
         curr["collision_vehicles"] > 0 or curr["collision_pedestrians"] > 0 or
         curr["collision_other"] > 0)
-    return bool(collided or curr["total_reward"] < -300)
+    return bool(collided or prev["total_reward"] < -300)
 
 
 # Returns true when moving farther out of bounds.  Uses prev instead of 0 since

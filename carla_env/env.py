@@ -234,12 +234,13 @@ class CarlaEnv(gym.Env):
         raise error
 
     def _build_camera(self, name, post):
-        camera_color = Camera(name, PostProcessing=post)
-        camera_color.set_image_size(
+        camera = Camera(name, PostProcessing=post)
+        camera.set_image_size(
             self.config["render_x_res"], self.config["render_y_res"])
-        camera_color.set_position(0.30, 0, 1.50)
-        camera_color.FOV = 60
-        return camera_color
+        camera.set_position(x=2.4, y=0, z=0.8)
+        camera.set_rotation(pitch=-40, roll=0, yaw=0)
+        # camera.FOV = 100
+        return camera
 
 
     def _reset(self):
@@ -379,15 +380,21 @@ class CarlaEnv(gym.Env):
             "reverse": reverse,
             "hand_brake": hand_brake,
         }
-        reward = compute_reward(
-            self, self.prev_measurement, py_measurements)
+
+        # Done?
+        finished = self.num_steps > self.scenario["max_steps"]
+        # py_measurements["next_command"] == "REACH_GOAL"
+        failed = TERM.compute_termination(self, py_measurements, self.prev_measurement)
+        done = finished or failed
+        py_measurements["finished"] = finished
+        py_measurements["failed"] = failed
+        py_measurements["done"] = done
+
+        # Determine Reward
+        reward = compute_reward(self, self.prev_measurement, py_measurements)
         self.total_reward += reward
         py_measurements["reward"] = reward
         py_measurements["total_reward"] = self.total_reward
-        done = (self.num_steps > self.scenario["max_steps"] or
-                py_measurements["next_command"] == "REACH_GOAL" or
-                TERM.compute_termination(self, py_measurements, self.prev_measurement))
-        py_measurements["done"] = done
         self.prev_measurement = py_measurements
 
         # Callback
@@ -521,12 +528,13 @@ class CarlaEnv(gym.Env):
             "max_steps": self.scenario["max_steps"],
             "next_command": next_command,
             "applied_penalty": False,
+            "total_reward": self.total_reward,
         }
 
         if self.config["carla_out_path"] \
                 and self.config["log_images"] \
                 and self.num_steps % self.config["log_image_frequency"] == 0\
-                and self.num_steps > 0:
+                and self.num_steps > 15:
             self.take_photo(
                 rgb_image=sensor_data["CameraRGB"],
                 class_data=clazzes

@@ -36,6 +36,13 @@ def compute_reward_corl2017(env, prev, current):
 
 
 def compute_reward_refined_lane(env, prev, current):
+    # Finished? Failed?
+    if current["done"]:
+        if current["finished"]:
+            return 10.0
+        if current["failed"]:
+            return -200.0
+
     # Reward based on movement
     desired_speed = 25
     reward = 0
@@ -54,8 +61,10 @@ def compute_reward_refined_lane(env, prev, current):
     # Reward peaks at desired speed, becoming negative if speed too high
     speed = current["forward_speed"] * 3.6
     if offroad == 0 and otherlane == 0:
-        # When at 0, receive very slight negative reward
-        reward += 1 - abs((speed - desired_speed - 0.05) / desired_speed)
+        if speed < 1:
+            reward -= 0.5
+        else:
+            reward += 1 - abs((speed - desired_speed) / desired_speed)
 
     # Push a penalty if exiting road for first time
     elif prev["intersection_offroad"] == 0 and prev["intersection_otherlane"] == 0:

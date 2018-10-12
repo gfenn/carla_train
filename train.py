@@ -23,8 +23,9 @@ TRAIN_CONFIG.update({
     "render_y_res": 228,
     "x_res": 228,
     "y_res": 228,
-    "fps": 50,
+    "fps": 30,
     "quality": "Epic",
+    # "quality": "Low",
     "use_depth_camera": False,
     "server_map": "/Game/Maps/Town02",
     "reward_function": rewards.REWARD_LANE_KEEP,
@@ -45,7 +46,7 @@ TRAIN_MODEL = deepq.models.cnn_to_mlp(
            (64, 3, 2), (64, 3, 2),
            (128, 3, 1), (128, 3, 1),
            (256, 3, 1), (256, 3, 1)],
-    hiddens=[1024, 1024],
+    hiddens=[2048, 2048],
     dueling=True
 )
 
@@ -65,7 +66,7 @@ def main():
     learn_config.update({
         "gpu_memory_fraction": 0.7,
         "lr": 1e-4,
-        "max_timesteps": int(2e6),
+        "max_timesteps": int(3e5),
         "buffer_size": int(8000),
         "exploration_fraction": 0.1,
         "exploration_final_eps": 0.1,
