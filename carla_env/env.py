@@ -247,6 +247,7 @@ class CarlaEnv(gym.Env):
         self.num_steps = 0
         self.total_reward = 0
         self.episode_index += 1
+        self.photo_index = 1
         self.prev_measurement = None
         self.prev_image = None
         self.episode_id = datetime.today().strftime("%Y-%m-%d_%H-%M-%S_%f")
@@ -577,6 +578,7 @@ class CarlaEnv(gym.Env):
             os.makedirs(videos_dir)
 
         # Build command
+        video_fps = self.config["fps"] / self.config["log_image_frequency"]
         ffmpeg_cmd = (
             "ffmpeg -loglevel -8 -r 10 -f image2 -s {x_res}x{y_res} "
             "-start_number 0 -i "
