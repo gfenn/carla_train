@@ -46,28 +46,30 @@ def compute_reward_refined_lane(env, prev, current):
     # Reward based on movement
     desired_speed = 25
     reward = 0
+    speed = current["forward_speed"] * 3.6
 
-    # If partially offroad, apply a penalty
+    # If partially offroad, apply a significant penalty
     offroad = current["intersection_offroad"]
     if offroad > 0:
-        reward -= 0.2 + offroad * 10
+        reward -= 1.0 + offroad * 100
 
-    # If partially out of the lane, apply a penalty
+    # If partially out of the lane, apply a lighter penalty
     otherlane = current["intersection_otherlane"]
     if otherlane > 0:
-        reward -= 0.1 + otherlane
+        reward -= 0.1 + otherlane * 10
 
-    # Provide a speed reward IF FULLY IN LANE ONLY
-    # Reward peaks at desired speed, becoming negative if speed too high
-    speed = current["forward_speed"] * 3.6
-    if offroad == 0 and otherlane == 0:
-        if speed < 1:
-            reward -= 0.5
-        else:
-            reward += 1 - abs((speed - desired_speed) / desired_speed)
+    # Provide a speed reward - reward peaks at desired speed, becoming negative if speed too high
+    if speed < 1:
+        reward -= 1.0
+    elif speed < 5:
+        reward -= 0.5
+    else:
+        reward += 1 - abs((speed - desired_speed) / desired_speed)
 
     # Push a penalty if exiting road for first time
-    elif prev["intersection_offroad"] == 0 and prev["intersection_otherlane"] == 0:
+    if prev["intersection_offroad"] == 0 and current["intersection_offroad"] > 0:
+        reward -= 20.0
+    if prev["intersection_otherlane"] == 0 and current["intersection_otherlane"] > 0:
         reward -= 5.0
 
     # Collision penalty

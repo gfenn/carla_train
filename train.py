@@ -16,7 +16,7 @@ TRAIN_CONFIG = ENV_CONFIG.copy()
 TRAIN_CONFIG.update({
     "verbose": False,
     "carla_out_path": carla_out_path,
-    "log_images": True,
+    "log_images": False,
     "log_image_frequency": 10,
     "convert_images_to_video": False,
     "render_x_res": 228,
@@ -65,10 +65,10 @@ def main():
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
         "gpu_memory_fraction": 0.7,
-        "lr": 1e-4,
-        "max_timesteps": int(3e5),
+        "lr": 1e-5,
+        "max_timesteps": int(5e5),
         "buffer_size": int(8000),
-        "exploration_fraction": 0.1,
+        "exploration_fraction": 0.00001,
         "exploration_final_eps": 0.1,
         "train_freq": 4,
         "learning_starts": 100,

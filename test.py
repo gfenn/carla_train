@@ -19,6 +19,8 @@ TEST_ENV.update({
     "server_map": "/Game/Maps/Town01",
     "reward_function": rewards.REWARD_LANE_KEEP,
     "scenarios": scenarios.TOWN1_LANE_KEEP,
+    "log_images": False,
+    "quality": "Low",
 })
 
 
@@ -45,7 +47,7 @@ def main():
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
-        "gpu_memory_fraction": 0.5,
+        "gpu_memory_fraction": 0.7,
         "lr": 1e-90,
         "max_timesteps": int(1e8),
         "buffer_size": int(1e3),
