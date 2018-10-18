@@ -235,19 +235,22 @@ class DeepqLearner:
         return self.act(np.array(obs)[None], update_eps=update_eps, **kwargs)[0]
 
     def _train(self):
-        # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
-        if self.config["prioritized_replay"]:
-            experience = self.replay_buffer.sample(self.config["batch_size"], beta=self.beta_schedule.value(self.t))
-            (obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = experience
-        else:
-            obses_t, actions, rewards, obses_tp1, dones = self.replay_buffer.sample(self.config["batch_size"])
-            weights, batch_idxes = np.ones_like(rewards), None
+        try:
+            # Minimize the error in Bellman's equation on a batch sampled from replay buffer.
+            if self.config["prioritized_replay"]:
+                experience = self.replay_buffer.sample(self.config["batch_size"], beta=self.beta_schedule.value(self.t))
+                (obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = experience
+            else:
+                obses_t, actions, rewards, obses_tp1, dones = self.replay_buffer.sample(self.config["batch_size"])
+                weights, batch_idxes = np.ones_like(rewards), None
 
-        # Determine errors
-        td_errors = self.train(obses_t, actions, rewards, obses_tp1, dones, weights)
-        if self.config["prioritized_replay"]:
-            new_priorities = np.abs(td_errors) + self.config["prioritized_replay_eps"]
-            self.replay_buffer.update_priorities(batch_idxes, new_priorities)
+            # Determine errors
+            td_errors = self.train(obses_t, actions, rewards, obses_tp1, dones, weights)
+            if self.config["prioritized_replay"]:
+                new_priorities = np.abs(td_errors) + self.config["prioritized_replay_eps"]
+                self.replay_buffer.update_priorities(batch_idxes, new_priorities)
+        except Exception as e:
+            print(e)
 
     def _reset(self):
         self.attempt_print()
