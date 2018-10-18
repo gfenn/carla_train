@@ -143,16 +143,11 @@ class DeepqLearner:
         self.act = ActWrapper(act, act_params)
 
         # Create the replay buffer
-        if config["prioritized_replay"]:
-            self.replay_buffer = PrioritizedReplayBuffer(config["buffer_size"], alpha=config["prioritized_replay_alpha"])
-            if config["prioritized_replay_beta_iters"] is None:
-                config["prioritized_replay_beta_iters"] = config["max_timesteps"]
-            self.beta_schedule = LinearSchedule(config["prioritized_replay_beta_iters"],
-                                                initial_p=config["prioritized_replay_beta0"],
-                                                final_p=1.0)
-        else:
-            self.replay_buffer = ReplayBuffer(config["buffer_size"])
-            self.beta_schedule = None
+        self.config = config
+        self.replay_buffer = None
+        self.beta_schedule = None
+        self.make_replay_buffer()
+
         # Create the schedule for exploration starting from 1.
         self.exploration = LinearSchedule(schedule_timesteps=int(config["exploration_fraction"] * config["max_timesteps"]),
                                           initial_p=1.0,
@@ -171,6 +166,18 @@ class DeepqLearner:
         self.model_file = None
         self.start_time = 0
         self.episode_start_time = 0
+
+    def make_replay_buffer(self):
+        if self.config["prioritized_replay"]:
+            self.replay_buffer = PrioritizedReplayBuffer(self.config["buffer_size"], alpha=self.config["prioritized_replay_alpha"])
+            if self.config["prioritized_replay_beta_iters"] is None:
+                self.config["prioritized_replay_beta_iters"] = self.config["max_timesteps"]
+            self.beta_schedule = LinearSchedule(self.config["prioritized_replay_beta_iters"],
+                                                initial_p=self.config["prioritized_replay_beta0"],
+                                                final_p=1.0)
+        else:
+            self.replay_buffer = ReplayBuffer(self.config["buffer_size"])
+            self.beta_schedule = None
 
     def run(self):
         reset = True
@@ -250,6 +257,7 @@ class DeepqLearner:
                 new_priorities = np.abs(td_errors) + self.config["prioritized_replay_eps"]
                 self.replay_buffer.update_priorities(batch_idxes, new_priorities)
         except Exception as e:
+            self.make_replay_buffer()
             print(e)
 
     def _reset(self):

@@ -158,6 +158,7 @@ class CarlaEnv(gym.Env):
         self.start_coord = None
         self.end_coord = None
         self.last_obs = None
+        self.last_full_obs = None
         self.framestack = [None] * config["framestack"]
         self.framestack_index = 0
         self.running_restarts = 0
@@ -335,13 +336,14 @@ class CarlaEnv(gym.Env):
     def step(self, action):
         try:
             obs = self._step(action)
+            self.last_full_obs = obs
             return obs
         except Exception:
             print(
                 "Error during step, terminating episode early",
                 traceback.format_exc())
             self.clear_server_state()
-            return (self.last_obs, 0.0, True, {})
+            return (self.last_full_obs, 0.0, True, {})
 
     def _step(self, action):
         action = DISCRETE_ACTIONS[int(action)]
@@ -376,7 +378,7 @@ class CarlaEnv(gym.Env):
         else:
             py_measurements["action"] = action
         py_measurements["control"] = {
-            "throttle_brake": action[1],
+            "throttle_brake": action[0],
             "steer": steer,
             "throttle": throttle,
             "brake": brake,
