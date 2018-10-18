@@ -26,7 +26,7 @@ from gym.spaces import Box, Discrete
 
 from carla_env.scenarios import DEFAULT_SCENARIO
 from carla_env.rewards import compute_reward
-from carla_env.classifier_converter import KEEP_CLASSIFICATIONS, reduce_classifications, resize_classifications, fuse_with_depth
+from carla_env.classifier_converter import KEEP_CLASSIFICATIONS, reduce_classifications, resize_classifications, fuse_with_depth, fused_to_rgb
 import carla_env.termination as TERM
 
 SERVER_BINARY = os.environ.get("CARLA_SERVER", os.path.expanduser("/usr/share/carla/current/CarlaUE4.sh"))
@@ -77,8 +77,10 @@ ENV_CONFIG = {
     "server_binary": SERVER_BINARY,
     "carla_out_path": CARLA_OUT_PATH,
     "measurements_subdir": "measurements",
-    "log_images": True,
-    "log_image_frequency": 1,
+    "save_ima%ges_rgb": False,
+    "save_images_class": False,
+    "save_images_fusion": False,
+    "save_image_frequency": 1,
     "enable_planner": True,
     "framestack": 2,  # note: only [1, 2] currently supported
     "convert_images_to_video": True,
@@ -270,7 +272,7 @@ class CarlaEnv(gym.Env):
         settings.randomize_seeds()
 
         # Add the cameras
-        if self.config["log_images"]:
+        if self.config["save_images_rgb"]:
             settings.add_sensor(self._build_camera(name="CameraRGB", post="SceneFinal"))
         settings.add_sensor(self._build_camera(name="CameraDepth", post="Depth"))
         settings.add_sensor(self._build_camera(name="CameraClass", post="SemanticSegmentation"))
@@ -533,12 +535,12 @@ class CarlaEnv(gym.Env):
         }
 
         if self.config["carla_out_path"] \
-                and self.config["log_images"] \
-                and self.num_steps % self.config["log_image_frequency"] == 0\
+                and self.num_steps % self.config["save_image_frequency"] == 0\
                 and self.num_steps > 15:
             self.take_photo(
-                rgb_image=sensor_data["CameraRGB"],
-                class_data=clazzes
+                sensor_data=sensor_data,
+                class_data=clazzes,
+                fused_data=observation
             )
 
         assert observation is not None, sensor_data
@@ -556,20 +558,29 @@ class CarlaEnv(gym.Env):
             os.mkdir(episode_dir)
         return episode_dir
 
-    def take_photo(self, rgb_image, class_data):
+    def take_photo(self, sensor_data, class_data, fused_data):
         # Get the proper locations\
         episode_dir = self.episode_dir()
+        photo_index = self.photo_index
+        name_prefix = "episode_{:>04}_step_{:>04}".format(self.episode_index, photo_index)
+        self.photo_index += 1
 
         # Save the image
-        photo_index = self.photo_index
-        self.photo_index += 1
-        image_path = os.path.join(episode_dir, "episode_{:>04}_step_{:>04}_rgb.jpg".format(self.episode_index, photo_index))
-        scipy.misc.imsave(image_path, rgb_image.data)
+        if self.config["save_images_rgb"]:
+            rgb_image = sensor_data["CameraRGB"]
+            image_path = os.path.join(episode_dir, name_prefix + "_rgb.png")
+            scipy.misc.imsave(image_path, rgb_image.data)
 
         # Save the classes
-        class_path = os.path.join(episode_dir, "episode_{:>04}_step_{:>04}_class".format(self.episode_index, photo_index))
-        np.save(class_path, class_data)
+        if self.config["save_images_class"]:
+            classes_path = os.path.join(episode_dir, name_prefix + "_class.png")
+            scipy.misc.imsave(classes_path, class_data.data)
 
+        # Save the class images
+        if self.config["save_images_fusion"]:
+            fused_images = fused_to_rgb(fused_data)
+            fused_path = os.path.join(episode_dir, name_prefix + "_fused.png")
+            scipy.misc.imsave(fused_path, fused_images.data)
 
     def images_to_video(self, camera_name):
         # Video directory
@@ -578,7 +589,7 @@ class CarlaEnv(gym.Env):
             os.makedirs(videos_dir)
 
         # Build command
-        video_fps = self.config["fps"] / self.config["log_image_frequency"]
+        video_fps = self.config["fps"] / self.config["saveimage_frequency"]
         ffmpeg_cmd = (
             "ffmpeg -loglevel -8 -r 10 -f image2 -s {x_res}x{y_res} "
             "-start_number 0 -i "

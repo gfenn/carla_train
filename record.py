@@ -18,8 +18,10 @@ RECORD_ENV.update({
     "server_map": "/Game/Maps/Town01",
     "reward_function": rewards.REWARD_LANE_KEEP,
     "scenarios": scenarios.TOWN1_LANE_KEEP,
-    "log_images": True,
-    "log_image_frequency": 10,
+    "save_images_rgb": True,
+    "save_images_class": True,
+    "save_images_fusion": False,
+    "save_image_frequency": 1,
     "convert_images_to_video": False,
     # "render_x_res": 632,
     # "render_y_res": 632,
@@ -52,7 +54,7 @@ def main():
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
-        "gpu_memory_fraction": 0.5,
+        "gpu_memory_fraction": 0.7,
         "lr": 1e-90,
         "max_timesteps": int(1e8),
         "buffer_size": int(1e3),

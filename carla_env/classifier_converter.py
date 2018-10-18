@@ -11,6 +11,14 @@ KEEP_CLASSES = [
 ]
 KEEP_CLASSIFICATIONS = len(KEEP_CLASSES)
 
+COLORS = [
+    [255, 255, 255],  # None
+    [255, 0, 255],  # Misc
+    [0, 255, 0],  # Road Lines
+    [0, 0, 255],  # Roads
+    [255, 0, 0],  # Sidewalks
+]
+
 CLASS_CONVERTER = {}
 for idx, sublist in enumerate(KEEP_CLASSES):
     for subclass in sublist:
@@ -59,3 +67,21 @@ def fuse_with_depth(classifications, depth, extra_layers=0):
             obs[x, y, classification] = depth[x, y]
     return obs
 
+def fused_to_rgb(data):
+    shape = (data.shape[0], data.shape[1], 3)
+    img = np.full(shape, 0, dtype=np.uint8)
+    for x in range(shape[0]):
+        for y in range(shape[1]):
+            for cls in range(KEEP_CLASSIFICATIONS):
+                color = COLORS[cls]
+                depth = data[x, y, cls]
+                mult = 1.0 - pow(min(0.2, depth) * 5, 0.25)
+                # mult = 1.0 - min(0.01, depth) * 100
+                img[x, y, 0] = max(img[x, y, 0], int(color[0] * mult))
+                img[x, y, 1] = max(img[x, y, 1], int(color[1] * mult))
+                img[x, y, 2] = max(img[x, y, 2], int(color[2] * mult))
+
+    return img
+
+def class_to_rgb(data):
+    pass
