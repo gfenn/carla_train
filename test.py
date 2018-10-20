@@ -81,7 +81,11 @@ def main():
         results = collector.results()
         print(",".join(str(x) for x in results))
         with open(carla_out_path + '/results.csv', 'w') as file:
-            collector.save(file)
+            collector.save_metrics_file(file)
+        with open(carla_out_path + '/crashes.csv', 'w') as file:
+            collector.save_crashes_file(file)
+        with open(carla_out_path + '/out-of-lanes.csv', 'w') as file:
+            collector.save_out_of_lane_file(file)
 
 if __name__ == '__main__':
     main()

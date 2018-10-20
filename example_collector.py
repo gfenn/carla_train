@@ -37,14 +37,32 @@ class EpisodeCollector:
             data[i] = data[i] / total
         return data
 
-    def save(self, file):
-        file.write(self.episodes[0].csv_header())
+    def save_metrics_file(self, file):
+        file.write(self.episodes[0].metrics_csv_header())
         for episode in self.episodes:
             if episode.steps >= self.min_steps:
                 file.write("\n")
-                file.write(",".join(str(x) for x in episode.csv_data()))
+                file.write(",".join(str(x) for x in episode.metrics_csv_data()))
         file.write("\n")
         file.write(",".join(str(x) for x in self.results()))
+
+    def save_crashes_file(self, file):
+        file.write(self.episodes[0].crashes_csv_header())
+        for episode in self.episodes:
+            if episode.steps >= self.min_steps:
+                crash = episode.crashes_csv_data()
+                if crash is not None:
+                    file.write("\n")
+                    file.write(",".join(str(x) for x in crash))
+
+    def save_out_of_lane_file(self, file):
+        file.write(self.episodes[0].out_of_lane_csv_header())
+        for episode in self.episodes:
+            if episode.steps >= self.min_steps:
+                instances = episode.out_of_lane_csv_data()
+                for instance in instances:
+                    file.write("\n")
+                    file.write(",".join(str(x) for x in instance))
 
 
 class EpisodeData:
@@ -62,6 +80,8 @@ class EpisodeData:
         self.out_of_lane_instances = 0
         self.out_of_lane_cooldown = 0
         self.reward = 0
+        self.crash_location = None
+        self.out_of_lane_instances = []
 
     def step(self, py_measurements):
         # Simple measurements
@@ -74,7 +94,9 @@ class EpisodeData:
             self.collision_pedestrian = True
         if py_measurements["collision_other"] > 0:
             self.collision_other = True
-        speed = py_measurements["forward_speed"] * 3.8
+        if self.collision_vehicle or self.collision_pedestrian or self.collision_other:
+            self.crash_location = [py_measurements["x"], py_measurements["y"]]
+        speed = py_measurements["forward_speed"] * 3.6
         self.speed_counter += speed
         self.max_speed = max(self.max_speed, speed)
         self.reward += py_measurements["reward"]
@@ -85,15 +107,16 @@ class EpisodeData:
         if is_out_of_lane and self.out_of_lane_cooldown <= 0:
             self.out_of_lane_cooldown = OUT_LANE_RESET + 1
             self.out_of_lane_instances += 1
+            self.out_of_lane_instances.append([py_measurements["x"], py_measurements["y"]])
         if self.out_of_lane_cooldown > 0:
             self.out_of_lane_cooldown -= 1
         self.is_out_of_lane = is_out_of_lane
 
-    def csv_header(self):
+    def metrics_csv_header(self):
         return "Steps,Offroad Percent,Otherlane Percent,Average Speed,Max Speed,OOL Instances," \
                "Collision - Vehicle,Collision - Pedestrian,Collision - Other,Reward"
 
-    def csv_data(self):
+    def metrics_csv_data(self):
         return [
             self.steps,
             self.offroad_counter / self.steps,
@@ -105,3 +128,15 @@ class EpisodeData:
             self.collision_pedestrian,
             self.collision_other,
             self.reward]
+
+    def crashes_csv_header(self):
+        return "X,Y"
+
+    def crashes_csv_data(self):
+        return self.crash_location
+
+    def out_of_lane_csv_header(self):
+        return "X,Y"
+
+    def out_of_lane_csv_data(self):
+        return self.out_of_lane_instances

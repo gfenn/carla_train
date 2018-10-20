@@ -22,6 +22,13 @@ def terminate_on_offroad(curr, prev):
     )
     return bool(bounded)
 
+def terminate_not_perfect(curr, prev):
+    bounded = (
+        (curr["intersection_offroad"] > prev["intersection_offroad"] and curr["intersection_offroad"] > 0) or
+        (curr["intersection_otherlane"] > prev["intersection_otherlane"] and curr["intersection_otherlane"] > 0)
+    )
+    return bool(bounded)
+
 def terminate_no_movement(curr, prev):
     # Increase your tracking
     tracking_no_move = prev.get("tracking_no_movement", 0)
@@ -42,13 +49,15 @@ TERMINATE_ON_COLLISION = "on_collision"
 TERMINATE_ON_OTHERLANE = "on_otherlane"
 TERMINATE_ON_OFFROAD = "on_offroad"
 TERMINATE_NO_MOVEMENT = "no_movement"
+TERMINATE_NOT_PERFECT = "not_perfect"
 
 
 TERMINATION_FUNCTIONS = {
     TERMINATE_ON_COLLISION: terminate_on_collision,
     TERMINATE_ON_OTHERLANE: terminate_on_otherlane,
     TERMINATE_ON_OFFROAD: terminate_on_offroad,
-    TERMINATE_NO_MOVEMENT: terminate_no_movement
+    TERMINATE_NO_MOVEMENT: terminate_no_movement,
+    TERMINATE_NOT_PERFECT: terminate_not_perfect
 }
 
 

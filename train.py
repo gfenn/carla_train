@@ -4,6 +4,7 @@ import carla_env.scenarios as scenarios
 import carla_env.termination as terminations
 import carla_env.rewards as rewards
 from baselines import deepq
+from model_builder import cnn_to_mlp
 import deepq_learner
 
 # Filenames
@@ -19,41 +20,53 @@ TRAIN_CONFIG.update({
     "save_images_rgb": False,
     "save_image_frequency": 10,
     "convert_images_to_video": False,
-    "render_x_res": 228,
-    "render_y_res": 228,
-    "x_res": 228,
-    "y_res": 228,
-    "fps": 30,
+    "render_x_res": 258,
+    "render_y_res": 258,
+    "x_res": 258,
+    "y_res": 258,
+    "fps": 50,
     # "quality": "Epic",
     "quality": "Low",
     "use_depth_camera": False,
     "server_map": "/Game/Maps/Town02",
     "reward_function": rewards.REWARD_LANE_KEEP,
     "enable_planner": False,
-    "framestack": 3,
+    "framestack": 2,
     terminations.EARLY_TERMINATIONS: [
-        terminations.TERMINATE_ON_COLLISION,
-        terminations.TERMINATE_ON_OFFROAD,
-        # terminations.TERMINATE_ON_OTHERLANE,
-        terminations.TERMINATE_NO_MOVEMENT],
+        # terminations.TERMINATE_ON_COLLISION,
+        # terminations.TERMINATE_ON_OFFROAD,
+        terminations.TERMINATE_NO_MOVEMENT,
+        # terminations.TERMINATE_NOT_PERFECT
+    ],
     "scenarios": scenarios.TOWN2_LANE_KEEP,
 })
 
 
 # Create an OpenAI-deepq baseline
-TRAIN_MODEL = deepq.models.cnn_to_mlp(
-    convs=[(32, 3, 2), (32, 3, 2),
-           (64, 3, 2), (64, 3, 2),
-           (128, 3, 1), (128, 3, 1),
-           (256, 3, 1), (256, 3, 1)],
-    hiddens=[2048, 2048],
-    dueling=True
-)
+MODEL_CONVS = [
+    {"num_outputs": 32, "kernel_size": 3, "stride": 2},
+    {"num_outputs": 32, "kernel_size": 3, "stride": 2, "max_pool": {"size": [2, 2], "stride": 2}},
+    {"num_outputs": 64, "kernel_size": 3, "stride": 1},
+    {"num_outputs": 64, "kernel_size": 3, "stride": 1, "max_pool": {"size": [2, 2], "stride": 2}},
+    {"num_outputs": 128, "kernel_size": 3, "stride": 1},
+    {"num_outputs": 128, "kernel_size": 3, "stride": 1, "max_pool": {"size": [2, 2], "stride": 2}},
+]
+MODEL_HIDDEN = [
+    {"neurons": 2048, "dropout": 0.5},
+    {"neurons": 2048}
+]
+MODEL_DUELING = True
 
 
 def main():
     # Build env
     env = CarlaEnv(TRAIN_CONFIG)
+    train_model = cnn_to_mlp(
+        convs=MODEL_CONVS,
+        hiddens=MODEL_HIDDEN,
+        dueling=MODEL_DUELING,
+        is_training=True
+    )
 
     # Determine paths
     model_save_path = os.path.join(carla_out_path, "model.pkl")
@@ -64,11 +77,11 @@ def main():
     # Learn
     learn_config = deepq_learner.DEEPQ_CONFIG.copy()
     learn_config.update({
-        "gpu_memory_fraction": 0.7,
-        "lr": 1e-5,
-        "max_timesteps": int(5e5),
-        "buffer_size": int(8000),
-        "exploration_fraction": 0.00001,
+        "gpu_memory_fraction": 0.4,
+        "lr": 1e-4,
+        "max_timesteps": int(1e6),
+        "buffer_size": int(1e4),
+        "exploration_fraction": 0.1,
         "exploration_final_eps": 0.1,
         "train_freq": 4,
         "learning_starts": 100,
@@ -80,7 +93,7 @@ def main():
         "checkpoint_path": checkpoint_path,
         "print_freq": 1
     })
-    learn = deepq_learner.DeepqLearner(env=env, q_func=TRAIN_MODEL, config=learn_config)
+    learn = deepq_learner.DeepqLearner(env=env, q_func=train_model, config=learn_config)
     learn.run()
 
     env.close()
